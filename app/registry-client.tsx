@@ -32,6 +32,10 @@ import {
 import { contactLine, type BusinessInfo } from "../lib/business-info";
 import { summarizeStatusCounts } from "../lib/equipment-summary";
 import { useModal } from "./use-modal";
+import { useUnsavedChanges, confirmDiscardChanges } from "./use-unsaved-changes";
+import { equipmentChangeConfirmation } from "../lib/equipment-confirmation";
+import { EQUIPMENT_TEXT_FIELDS } from "../lib/equipment-validation";
+import { MAX_MONEY_CENTS } from "../lib/equipment-values";
 import { useSessionRenewal } from "./use-session-renewal";
 
 type Status = "ingreso" | "diagnostico" | "reparacion" | "listo" | "entregado" | "anulado";
@@ -213,7 +217,17 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
   const [invoice, setInvoice] = useState<Equipment | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(createInitialForm);
-  const newModalRef = useModal(() => setNewOpen(false));
+  const [initialForm, setInitialForm] = useState(form);
+  const newDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
+  useUnsavedChanges(newOpen && (newDirty || saving));
+  function closeNewRecord() {
+    if (saving || (newDirty && !confirmDiscardChanges())) return;
+    const empty = createInitialForm();
+    setInitialForm(empty);
+    setForm(empty);
+    setNewOpen(false);
+  }
+  const newModalRef = useModal(closeNewRecord);
   const queryKey = `${filter}\u0000${debouncedSearch}\u0000${refreshVersion}`;
   const queryKeyRef = useRef(queryKey);
   const loadMoreRequestIdRef = useRef(0);
@@ -379,7 +393,10 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
     (serverSummary?.total ?? 0) > 0;
 
   function openNewRecord() {
-    setForm((current) => ({ ...current, entryDate: today() }));
+    setNotice(null);
+    const empty = createInitialForm();
+    setInitialForm(empty);
+    setForm(empty);
     setNewOpen(true);
   }
 
@@ -403,6 +420,11 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
   }
 
   async function updateRecord(id: number, values: Record<string, unknown>, openInvoice = false, openDetailAfterUpdate = true) {
+    if (saving) return;
+    const current = detail?.id === id ? detail : records.find(record => record.id === id);
+    if (!current) return;
+    const confirmation = equipmentChangeConfirmation(current, values);
+    if (confirmation && !window.confirm(confirmation)) return;
     setSaving(true);
     setNotice(null);
     try {
@@ -417,6 +439,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
       // métricas. La respuesta de PATCH no contiene esos agregados.
       setRefreshVersion((current) => current + 1);
       setNotice({ text: openInvoice ? "Salida registrada. La factura no fiscal está lista." : "Registro actualizado.", error: false });
+      return updated;
     } catch (error) {
       setNotice({ text: error instanceof Error ? error.message : "No se pudo actualizar el registro.", error: true });
     } finally { setSaving(false); }
@@ -424,33 +447,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
 
   function handleStatusChange(record: Equipment, event: ChangeEvent<HTMLSelectElement>) {
     const nextStatus = event.currentTarget.value as Status;
-
-    if (nextStatus === "entregado" && record.status !== "entregado") {
-      const hasZeroCosts = record.partsCostCents === 0 && record.laborCostCents === 0;
-      let message = `La orden ${record.orderNumber} se marcará como entregada y se generará una factura. ¿Deseas continuar?`;
-      if (hasZeroCosts) {
-        message += "\n\nAdvertencia: esta orden no tiene costos de piezas ni mano de obra; la factura se generará por $0.00.";
-      }
-
-      if (!window.confirm(message)) {
-        event.currentTarget.value = record.status;
-        return;
-      }
-    }
-
-    // Anular no borra la orden: la deja fuera del trabajo en curso y, si venía
-    // entregada, le quita la factura. Se confirma porque desde la tabla es un
-    // clic, y deshacerlo exige acordarse de en qué estado estaba.
-    if (nextStatus === "anulado" && record.status !== "anulado") {
-      let message = `La orden ${record.orderNumber} quedará anulada y saldrá del trabajo en curso. Su número no se reutiliza.`;
-      if (record.status === "entregado") {
-        message += "\n\nAdvertencia: esta orden está entregada; anularla borra su factura y deja de contar como facturación del mes.";
-      }
-      if (!window.confirm(message)) {
-        event.currentTarget.value = record.status;
-        return;
-      }
-    }
+    event.currentTarget.value = record.status;
 
     void updateRecord(record.id, { status: nextStatus }, false, false);
   }
@@ -501,7 +498,13 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
       <section className="records-card">
         <div className="records-head">
           <div><h2>Órdenes de servicio</h2><p>{records.length} de {total} resultados cargados</p></div>
-          <label className="search"><span aria-hidden="true">⌕</span><input aria-label="Buscar" maxLength={200} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar orden, cliente o equipo" /></label>
+          <div className="records-tools">
+            <label className="search"><span aria-hidden="true">⌕</span><input aria-label="Buscar" maxLength={200} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar orden, cliente o equipo" /></label>
+            <div className="records-tool-buttons">
+              {(search || filter !== "todos") && <button className="ghost-button" onClick={() => { setSearch(""); setDebouncedSearch(""); setFilter("todos"); }}>Limpiar filtros</button>}
+              <button className="secondary-button" disabled={loading || saving} onClick={() => setRefreshVersion(value => value + 1)}>{loading ? "Actualizando…" : "Actualizar"}</button>
+            </div>
+          </div>
         </div>
         <div className="tabs" role="group" aria-label="Filtrar por estado">
           <button aria-pressed={filter === "todos"} className={filter === "todos" ? "active" : ""} onClick={() => setFilter("todos")}>Todos <b>{liveTotal}</b></button>
@@ -532,36 +535,36 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
         {hasMore && <div className="load-more"><button className="secondary-button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Cargando…" : "Cargar más"}</button></div>}
       </section>
 
-      {newOpen && <div className="modal-backdrop" role="presentation" onMouseDown={closeOnBackdrop(() => setNewOpen(false))}><section ref={newModalRef} className="drawer" aria-modal="true" role="dialog" aria-labelledby="new-title">
-        <div className="drawer-head"><div><p className="eyebrow">NUEVA ORDEN</p><h2 id="new-title">Registrar ingreso</h2></div><button className="close" onClick={() => setNewOpen(false)} aria-label="Cerrar">×</button></div>
+      {newOpen && <div className="modal-backdrop" role="presentation" onMouseDown={closeOnBackdrop(closeNewRecord)}><section ref={newModalRef} className="drawer" aria-modal="true" role="dialog" aria-labelledby="new-title">
+        <div className="drawer-head"><div><p className="eyebrow">NUEVA ORDEN</p><h2 id="new-title">Registrar ingreso</h2></div><button className="close" onClick={closeNewRecord} aria-label="Cerrar">×</button></div>
         <form onSubmit={createRecord} className="entry-form">
-          <fieldset><legend>Datos del cliente</legend><div className="form-grid">
-            <label className="wide">Nombre o empresa *<input data-autofocus type="text" required maxLength={120} autoComplete="name" value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} placeholder="Ej. Ana Rodríguez" /></label>
+          {notice?.error && <p className="field-error" role="alert">{notice.text}</p>}
+          <fieldset disabled={saving}><legend>Datos del cliente</legend><div className="form-grid">
+            <label className="wide">Nombre o empresa *<input data-autofocus type="text" required maxLength={EQUIPMENT_TEXT_FIELDS.customerName.max} autoComplete="name" value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} placeholder="Ej. Ana Rodríguez" /></label>
             <label>Teléfono<input type="tel" inputMode="numeric" autoComplete="tel" minLength={CUSTOMER_PHONE_MIN_LENGTH} maxLength={CUSTOMER_PHONE_MAX_LENGTH} pattern="[0-9]{7,15}" title="Ingresa únicamente números, entre 7 y 15 dígitos." aria-describedby="phone-hint" value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: keepPhoneDigits(e.target.value) })} placeholder="60000000" /><small id="phone-hint" className="field-hint">Solo números, sin espacios ni guiones.</small></label>
             <label>Correo<input type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} maxLength={CUSTOMER_EMAIL_MAX_LENGTH} pattern={EMAIL_INPUT_PATTERN} title="Usa un formato como cliente@correo.com." aria-describedby="email-hint" value={form.customerEmail} onChange={(e) => setForm({ ...form, customerEmail: e.target.value })} placeholder="cliente@correo.com" /><small id="email-hint" className="field-hint">Debe incluir @ y un dominio, por ejemplo .com.</small></label>
           </div></fieldset>
-          <fieldset><legend>Equipo recibido</legend><div className="form-grid">
+          <fieldset disabled={saving}><legend>Equipo recibido</legend><div className="form-grid">
             <label>Tipo de equipo *<select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value })}>{EQUIPMENT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
             <label>Fecha de ingreso<input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} /></label>
-            <label className="wide">Técnico asignado<input type="text" maxLength={100} value={form.assignedTechnician} onChange={(e) => setForm({ ...form, assignedTechnician: e.target.value })} placeholder="Nombre del técnico o Sin asignar" /></label>
-            <label>Marca<input type="text" maxLength={80} value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Ej. Lenovo" /></label>
-            <label>Modelo<input type="text" maxLength={120} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="Ej. ThinkPad E14" /></label>
-            <label className="wide">Accesorios recibidos<input type="text" maxLength={300} value={form.accessories} onChange={(e) => setForm({ ...form, accessories: e.target.value })} placeholder="Cargador, bolso, cable USB…" /></label>
-            <label className="wide">Falla reportada *<textarea required maxLength={2000} value={form.reportedIssue} onChange={(e) => setForm({ ...form, reportedIssue: e.target.value })} placeholder="Describe lo que reporta el cliente" /></label>
-            <label className="wide">Daños visibles al ingreso<textarea maxLength={2000} value={form.damageNotes} onChange={(e) => setForm({ ...form, damageNotes: e.target.value })} placeholder="Golpes, rayones, piezas faltantes…" /></label>
+            <label className="wide">Técnico asignado<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.assignedTechnician.max} value={form.assignedTechnician} onChange={(e) => setForm({ ...form, assignedTechnician: e.target.value })} placeholder="Nombre del técnico o Sin asignar" /></label>
+            <label>Marca<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.brand.max} value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Ej. Lenovo" /></label>
+            <label>Modelo<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.model.max} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="Ej. ThinkPad E14" /></label>
+            <label className="wide">Accesorios recibidos<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.accessories.max} value={form.accessories} onChange={(e) => setForm({ ...form, accessories: e.target.value })} placeholder="Cargador, bolso, cable USB…" /></label>
+            <label className="wide">Falla reportada *<textarea required maxLength={EQUIPMENT_TEXT_FIELDS.reportedIssue.max} value={form.reportedIssue} onChange={(e) => setForm({ ...form, reportedIssue: e.target.value })} placeholder="Describe lo que reporta el cliente" /></label>
+            <label className="wide">Daños visibles al ingreso<textarea maxLength={EQUIPMENT_TEXT_FIELDS.damageNotes.max} value={form.damageNotes} onChange={(e) => setForm({ ...form, damageNotes: e.target.value })} placeholder="Golpes, rayones, piezas faltantes…" /></label>
           </div></fieldset>
-          <div className="form-actions"><button type="button" className="ghost-button" onClick={() => setNewOpen(false)}>Cancelar</button><button className="primary-button" disabled={saving}>{saving ? "Guardando…" : "Guardar ingreso"}</button></div>
+          <div className="form-actions"><button type="button" className="ghost-button" onClick={closeNewRecord}>Cancelar</button><button className="primary-button" disabled={saving}>{saving ? "Guardando…" : "Guardar ingreso"}</button></div>
         </form>
       </section></div>}
 
-      {detail && <DetailDrawer record={detail} saving={saving} onClose={() => setDetail(null)} onUpdate={updateRecord} onInvoice={(values) => updateRecord(detail.id, { ...values, status: "entregado", exitDate: today() }, true)} onShowInvoice={() => { setDetail(null); setInvoice(detail); }} />}
+      {detail && <DetailDrawer key={detail.id} record={detail} saving={saving} errorMessage={notice?.error ? notice.text : null} onClose={() => setDetail(null)} onUpdate={updateRecord} onInvoice={(values) => updateRecord(detail.id, { ...values, status: "entregado", exitDate: today() }, true)} onShowInvoice={() => { setDetail(null); setInvoice(detail); }} />}
       {invoice && <InvoiceModal record={invoice} business={business} onClose={() => setInvoice(null)} />}
     </main>
   );
 }
 
-function DetailDrawer({ record, saving, onClose, onUpdate, onInvoice, onShowInvoice }: { record: Equipment; saving: boolean; onClose: () => void; onUpdate: (id: number, values: Record<string, unknown>) => Promise<void>; onInvoice: (values: Record<string, unknown>) => Promise<void>; onShowInvoice: () => void }) {
-  const modalRef = useModal(onClose);
+function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoice, onShowInvoice }: { record: Equipment; saving: boolean; errorMessage: string | null; onClose: () => void; onUpdate: (id: number, values: Record<string, unknown>) => Promise<Equipment | undefined>; onInvoice: (values: Record<string, unknown>) => Promise<Equipment | undefined>; onShowInvoice: () => void }) {
   const [draft, setDraft] = useState(() => ({
     ...record,
     laborDescription:
@@ -573,7 +576,7 @@ function DetailDrawer({ record, saving, onClose, onUpdate, onInvoice, onShowInvo
   const [laborCostInput, setLaborCostInput] = useState(centsToDollarInput(record.laborCostCents));
   const partsCostCents = dollarsToCents(partsCostInput);
   const laborCostCents = dollarsToCents(laborCostInput);
-  const costsValid = partsCostCents !== null && laborCostCents !== null;
+  const costsValid = partsCostCents !== null && laborCostCents !== null && partsCostCents + laborCostCents <= MAX_MONEY_CENTS;
   const totals = calculateTotals(partsCostCents ?? 0, laborCostCents ?? 0);
   const updateValues = costsValid
     ? {
@@ -597,36 +600,61 @@ function DetailDrawer({ record, saving, onClose, onUpdate, onInvoice, onShowInvo
         damageNotes: draft.damageNotes,
       }
     : null;
-  return <div className="modal-backdrop" role="presentation" onMouseDown={closeOnBackdrop(onClose)}><section ref={modalRef} className="drawer detail-drawer" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-    <div className="drawer-head"><div><p className="eyebrow">{record.orderNumber}</p><h2 id="detail-title">{record.equipmentType} {record.brand}</h2><span className={`status ${record.status}`}>{statusLabel[record.status]}</span></div><button className="close" onClick={onClose} aria-label="Cerrar">×</button></div>
+  const dirty = !updateValues || Object.entries(updateValues).some(([key, value]) => {
+    const original = key === "laborDescription" && record.laborDescription === DEFAULT_LABOR_DESCRIPTION
+      ? "" : record[key as keyof Equipment];
+    return value !== original;
+  });
+  useUnsavedChanges(dirty || saving);
+  function requestClose() {
+    if (saving || (dirty && !confirmDiscardChanges())) return;
+    onClose();
+  }
+  function showSavedInvoice() {
+    if (saving || (dirty && !confirmDiscardChanges())) return;
+    onShowInvoice();
+  }
+  async function saveChanges() {
+    if (!updateValues) return;
+    const updated = await onUpdate(record.id, updateValues);
+    if (!updated) return;
+    setDraft({ ...updated, laborDescription: updated.laborDescription === DEFAULT_LABOR_DESCRIPTION ? "" : updated.laborDescription });
+    setPartsCostInput(centsToDollarInput(updated.partsCostCents));
+    setLaborCostInput(centsToDollarInput(updated.laborCostCents));
+  }
+  const modalRef = useModal(requestClose);
+  return <div className="modal-backdrop" role="presentation" onMouseDown={closeOnBackdrop(requestClose)}><section ref={modalRef} className="drawer detail-drawer" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div className="drawer-head"><div><p className="eyebrow">{record.orderNumber}</p><h2 id="detail-title">{record.equipmentType} {record.brand}</h2><span className={`status ${record.status}`}>{statusLabel[record.status]}</span></div><button className="close" onClick={requestClose} aria-label="Cerrar">×</button></div>
     <div className="customer-strip"><div className="avatar">{record.customerName.slice(0, 2).toUpperCase()}</div><div><strong>{record.customerName}</strong><span>{record.customerPhone || record.customerEmail || "Sin contacto"}</span></div></div>
-    <div className="detail-body">
+    <fieldset disabled={saving} className="detail-body" aria-label="Datos de la orden" style={{ border: 0, margin: 0, minWidth: 0 }}>
+      {errorMessage && <p className="field-error" role="alert">{errorMessage}</p>}
       <div className="detail-facts"><span><b>Modelo</b>{record.model || "-"}</span><span><b>Ingreso</b>{formatDate(record.entryDate)}</span><span><b>Accesorios</b>{record.accessories || "Ninguno"}</span></div>
       <div className="issue"><b>Falla reportada</b><p>{record.reportedIssue}</p>{record.damageNotes && <small>Daños visibles: {record.damageNotes}</small>}</div>
-      <label>Técnico asignado<input maxLength={100} value={draft.assignedTechnician} onChange={(e) => setDraft({ ...draft, assignedTechnician: e.target.value })} placeholder="Sin asignar" /></label>
+      <label>Técnico asignado<input maxLength={EQUIPMENT_TEXT_FIELDS.assignedTechnician.max} value={draft.assignedTechnician} onChange={(e) => setDraft({ ...draft, assignedTechnician: e.target.value })} placeholder="Sin asignar" /></label>
       <label>Estado<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label>Diagnóstico / trabajo realizado<textarea maxLength={4000} value={draft.diagnosis} onChange={(e) => setDraft({ ...draft, diagnosis: e.target.value })} placeholder="Resultado del diagnóstico y solución aplicada" /></label>
+      <label>Diagnóstico / trabajo realizado<textarea maxLength={EQUIPMENT_TEXT_FIELDS.diagnosis.max} value={draft.diagnosis} onChange={(e) => setDraft({ ...draft, diagnosis: e.target.value })} placeholder="Resultado del diagnóstico y solución aplicada" /></label>
       {/* Plegado por defecto: corregir un ingreso es la excepción, no el uso
           diario, y desplegado empujaría los costos fuera de la pantalla. */}
       <details className="edit-entry">
         <summary>Corregir datos del ingreso</summary>
         <div className="form-grid">
-          <label className="wide">Nombre o empresa *<input maxLength={120} value={draft.customerName} onChange={(e) => setDraft({ ...draft, customerName: e.target.value })} /></label>
+          <label className="wide">Nombre o empresa *<input maxLength={EQUIPMENT_TEXT_FIELDS.customerName.max} value={draft.customerName} onChange={(e) => setDraft({ ...draft, customerName: e.target.value })} /></label>
           <label>Teléfono<input type="tel" inputMode="numeric" minLength={CUSTOMER_PHONE_MIN_LENGTH} maxLength={CUSTOMER_PHONE_MAX_LENGTH} pattern="[0-9]{7,15}" title="Solo números, entre 7 y 15 dígitos." value={draft.customerPhone} onChange={(e) => setDraft({ ...draft, customerPhone: keepPhoneDigits(e.target.value) })} /></label>
           <label>Correo<input type="email" inputMode="email" autoCapitalize="none" spellCheck={false} maxLength={CUSTOMER_EMAIL_MAX_LENGTH} pattern={EMAIL_INPUT_PATTERN} title="Usa un formato como cliente@correo.com." value={draft.customerEmail} onChange={(e) => setDraft({ ...draft, customerEmail: e.target.value })} /></label>
           <label>Tipo de equipo *<select value={draft.equipmentType} onChange={(e) => setDraft({ ...draft, equipmentType: e.target.value })}>{EQUIPMENT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
           <label>Fecha de ingreso<input type="date" value={draft.entryDate} onChange={(e) => setDraft({ ...draft, entryDate: e.target.value })} /></label>
-          <label>Marca<input maxLength={80} value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} /></label>
-          <label>Modelo<input maxLength={120} value={draft.model} onChange={(e) => setDraft({ ...draft, model: e.target.value })} /></label>
-          <label className="wide">Accesorios recibidos<input maxLength={300} value={draft.accessories} onChange={(e) => setDraft({ ...draft, accessories: e.target.value })} /></label>
-          <label className="wide">Falla reportada *<textarea maxLength={2000} value={draft.reportedIssue} onChange={(e) => setDraft({ ...draft, reportedIssue: e.target.value })} /></label>
-          <label className="wide">Daños visibles al ingreso<textarea maxLength={2000} value={draft.damageNotes} onChange={(e) => setDraft({ ...draft, damageNotes: e.target.value })} /></label>
+          <label>Marca<input maxLength={EQUIPMENT_TEXT_FIELDS.brand.max} value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} /></label>
+          <label>Modelo<input maxLength={EQUIPMENT_TEXT_FIELDS.model.max} value={draft.model} onChange={(e) => setDraft({ ...draft, model: e.target.value })} /></label>
+          <label className="wide">Accesorios recibidos<input maxLength={EQUIPMENT_TEXT_FIELDS.accessories.max} value={draft.accessories} onChange={(e) => setDraft({ ...draft, accessories: e.target.value })} /></label>
+          <label className="wide">Falla reportada *<textarea maxLength={EQUIPMENT_TEXT_FIELDS.reportedIssue.max} value={draft.reportedIssue} onChange={(e) => setDraft({ ...draft, reportedIssue: e.target.value })} /></label>
+          <label className="wide">Daños visibles al ingreso<textarea maxLength={EQUIPMENT_TEXT_FIELDS.damageNotes.max} value={draft.damageNotes} onChange={(e) => setDraft({ ...draft, damageNotes: e.target.value })} /></label>
         </div>
       </details>
-      <label>Nota<textarea maxLength={2000} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Llamada al cliente, repuesto pedido, acuerdo de pago…" /></label>
-      <div className="cost-box"><h3>Costos del servicio</h3><label>Descripción de piezas<input maxLength={500} value={draft.partsDescription} onChange={(e) => setDraft({ ...draft, partsDescription: e.target.value })} placeholder="Pieza o repuesto utilizado" /></label><label className="money-field">Precio de piezas<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={partsCostCents === null} value={partsCostInput} onChange={(e) => setPartsCostInput(e.target.value)} /></label><label>Descripción de mano de obra<input maxLength={500} value={draft.laborDescription} onChange={(e) => setDraft({ ...draft, laborDescription: e.target.value })} placeholder="Ej. Diagnóstico, instalación o limpieza" /></label><label className="money-field">Mano de obra<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={laborCostCents === null} value={laborCostInput} onChange={(e) => setLaborCostInput(e.target.value)} /></label>{!costsValid && <p className="field-error" role="alert">Ingresa montos válidos, mayores o iguales a cero y con máximo dos decimales.</p>}{costsValid && <div className="cost-summary"><div className="total-row"><span>Total estimado</span><strong>{formatMoney(totals.totalCents)}</strong></div></div>}</div>
-    </div>
-    <div className="drawer-actions"><button className="secondary-button" disabled={saving || !updateValues} onClick={() => { if (updateValues) void onUpdate(record.id, updateValues); }}>Guardar cambios</button>{record.status !== "entregado" ? <button className="primary-button" disabled={saving || !updateValues} onClick={() => { if (updateValues) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" onClick={onShowInvoice}>Ver factura</button>}</div>
+      <label>Nota<textarea maxLength={EQUIPMENT_TEXT_FIELDS.notes.max} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Llamada al cliente, repuesto pedido, acuerdo de pago…" /></label>
+      <div className="cost-box"><h3>Costos del servicio</h3><label>Descripción de piezas<input maxLength={EQUIPMENT_TEXT_FIELDS.partsDescription.max} value={draft.partsDescription} onChange={(e) => setDraft({ ...draft, partsDescription: e.target.value })} placeholder="Pieza o repuesto utilizado" /></label><label className="money-field">Precio de piezas<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={partsCostCents === null} value={partsCostInput} onChange={(e) => setPartsCostInput(e.target.value)} /></label><label>Descripción de mano de obra<input maxLength={EQUIPMENT_TEXT_FIELDS.laborDescription.max} value={draft.laborDescription} onChange={(e) => setDraft({ ...draft, laborDescription: e.target.value })} placeholder="Ej. Diagnóstico, instalación o limpieza" /></label><label className="money-field">Mano de obra<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={laborCostCents === null} value={laborCostInput} onChange={(e) => setLaborCostInput(e.target.value)} /></label>{!costsValid && <p className="field-error" role="alert">Ingresa montos válidos, mayores o iguales a cero y con máximo dos decimales y un total de hasta $21,474,836.47.</p>}{costsValid && <div className="cost-summary"><div className="total-row"><span>Total estimado</span><strong>{formatMoney(totals.totalCents)}</strong></div></div>}</div>
+    </fieldset>
+    {dirty && <p className="unsaved-hint" role="status">Cambios sin guardar</p>}
+    <div className="drawer-actions"><button className="secondary-button" disabled={saving || !updateValues} onClick={() => void saveChanges()}>Guardar cambios</button>{record.status !== "entregado" ? <button className="primary-button" disabled={saving || !updateValues} onClick={() => { if (updateValues) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={saving} onClick={showSavedInvoice}>Ver factura</button>}</div>
   </section></div>;
 }
 

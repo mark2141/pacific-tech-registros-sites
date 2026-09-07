@@ -1,3 +1,5 @@
+export const MAX_MONEY_CENTS = 2_147_483_647;
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export class InvalidEquipmentDateError extends Error {
@@ -9,7 +11,7 @@ export class InvalidEquipmentDateError extends Error {
 
 export class InvalidMoneyValueError extends Error {
   constructor(fieldLabel: string) {
-    super(`El monto de ${fieldLabel} no es válido. Ingresa un valor mayor o igual a cero.`);
+    super(`El monto de ${fieldLabel} no es válido. Ingresa un monto entre $0.00 y $21,474,836.47.`);
     this.name = "InvalidMoneyValueError";
   }
 }
@@ -41,8 +43,12 @@ export function parseOptionalIsoDate(value: unknown, fieldLabel: string) {
 export function parseOptionalCents(value: unknown, fieldLabel: string) {
   if (value === undefined || value === null || value === "") return undefined;
 
+  if ((typeof value !== "number" && typeof value !== "string") ||
+      (typeof value === "string" && !/^\d+$/.test(value.trim()))) {
+    throw new InvalidMoneyValueError(fieldLabel);
+  }
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > MAX_MONEY_CENTS) {
     throw new InvalidMoneyValueError(fieldLabel);
   }
 

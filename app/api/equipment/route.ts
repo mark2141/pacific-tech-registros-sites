@@ -1,3 +1,4 @@
+import { readEquipmentPayload, InvalidEquipmentPayloadError } from "../../../lib/equipment-validation";
 import { listEquipment, createEquipment, updateEquipment } from "@platform/equipment";
 import { isUniqueConstraintError } from "../../../lib/database-error";
 import {
@@ -55,6 +56,7 @@ function unauthorized() {
 
 function validationResponse(error: unknown) {
   if (
+    error instanceof InvalidEquipmentPayloadError ||
     error instanceof InvalidEquipmentDateError ||
     error instanceof InvalidMoneyValueError ||
     error instanceof InvalidContactValueError ||
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
   try {
     const user = await getAuthUser();
     if (!user) return unauthorized();
-    const payload = (await request.json()) as Record<string, unknown>;
+    const payload = await readEquipmentPayload(request);
     const customerName = clean(payload.customerName);
     const equipmentType = clean(payload.equipmentType);
     const reportedIssue = clean(payload.reportedIssue);
@@ -129,9 +131,9 @@ export async function PATCH(request: Request) {
   try {
     const user = await getAuthUser();
     if (!user) return unauthorized();
-    const payload = (await request.json()) as Record<string, unknown>;
+    const payload = await readEquipmentPayload(request);
     const id = Number(payload.id);
-    if (!Number.isInteger(id) || id < 1) {
+    if ((typeof payload.id !== "number" && typeof payload.id !== "string") || !/^[0-9]+$/.test(String(payload.id)) || !Number.isInteger(id) || id < 1 || id > 2_147_483_647) {
       return json({ error: "Registro inválido." }, 400);
     }
 

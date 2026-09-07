@@ -275,3 +275,13 @@ textarea { resize: vertical; min-height: 78px; line-height: 1.4; }
 
 .preview-banner { padding: 10px 16px; margin-bottom: 16px; border: 1px solid #bae6fd; border-radius: 10px; background: #eff6ff; color: #075985; font-size: 14px; font-weight: 600; }
 @media print { .preview-banner { display: none; } }
+
+.records-tools { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.records-tool-buttons { display: flex; gap: 8px; align-items: center; }
+.records-tools .search { flex: 1; }
+.unsaved-hint { color: #92400e; background: #fffbeb; margin: 0; padding: 10px 28px; font-size: 14px; }
+@media (max-width: 760px) {
+  .records-tools { align-items: stretch; }
+  .records-tools .search { flex-basis: 100%; }
+  .records-tool-buttons { justify-content: flex-end; width: 100%; }
+}

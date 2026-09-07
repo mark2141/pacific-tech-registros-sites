@@ -14,36 +14,10 @@ import { getDb } from "../../db";
 import { equipment } from "../../db/schema";
 import { isUniqueConstraintError } from "../../lib/database-error";
 import { buildEquipmentUpdate } from "../../lib/equipment-update";
-import { ORDER_SEQUENCE_WIDTH } from "../../lib/order-number";
+import { monthlyOrderNumber } from "./order-number";
 import { todayInPanama } from "../../lib/panama-date";
 import { escapeLikePattern, serializeEquipmentCursor } from "../../lib/equipment-query";
 import type { EquipmentListQuery, NewEquipmentInput } from "../../lib/equipment-repository";
-
-function monthlyOrderNumber(prefix: string) {
-  const suffixStart = prefix.length + 1;
-  const monthlyPattern = `${prefix}%`;
-
-  // Postgres aborta la consulta si un CAST a INTEGER falla, mientras que SQLite
-  // devolvía cero en silencio. El filtro sobre el sufijo garantiza que solo
-  // entren correlativos numéricos, de modo que un `order_number` escrito a mano
-  // no puede tumbar el alta de una orden nueva.
-  //
-  // Los parámetros van con cast explícito: Drizzle los envía como bind y
-  // Postgres no siempre puede inferir el tipo de un parámetro suelto en `||`
-  // o en los argumentos de lpad/substr.
-  return sql<string>`(
-    ${prefix}::text || lpad(
-      (COALESCE((
-        SELECT MAX(CAST(substr(${equipment.orderNumber}, ${suffixStart}::int) AS INTEGER))
-        FROM ${equipment}
-        WHERE ${equipment.orderNumber} LIKE ${monthlyPattern}
-          AND substr(${equipment.orderNumber}, ${suffixStart}::int) ~ '^[0-9]+$'
-      ), 0) + 1)::text,
-      ${ORDER_SEQUENCE_WIDTH}::int,
-      '0'
-    )
-  )`;
-}
 
 export async function listEquipment({ search, status, limit, offset, cursor }: EquipmentListQuery) {
     const db = getDb();

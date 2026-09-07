@@ -45,4 +45,8 @@ test("genera correlativos OT-YYYYMM-NNN y reinicia cada mes", (context) => {
   assert.equal(createFor("2026-01-31"), "OT-202601-002");
   assert.equal(createFor("2026-02-01"), "OT-202602-001");
   assert.equal(createFor("2026-01-31"), "OT-202601-003");
+  db.prepare("INSERT INTO equipment (order_number) VALUES (?)").run("OT-202601-999");
+  assert.equal(createFor("2026-01-31"), "OT-202601-1000");
+  assert.equal(createFor("2026-01-31"), "OT-202601-1001");
+  assert.equal(formatOrderNumber(januaryPrefix, 1000), "OT-202601-1000");
 });

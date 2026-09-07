@@ -1,6 +1,9 @@
+import { validateEquipmentTextFields } from "./equipment-validation.ts";
 import { calculateTotals } from "./totals.ts";
 import {
   isValidIsoDate,
+  MAX_MONEY_CENTS,
+  InvalidMoneyValueError,
   parseOptionalCents,
   parseOptionalIsoDate,
 } from "./equipment-values.ts";
@@ -81,6 +84,7 @@ export function buildEquipmentUpdate(
   current: CurrentEquipmentRow,
   payload: Record<string, unknown>,
 ) {
+  validateEquipmentTextFields(payload);
   const status = clean(payload.status);
   if (status && !allowedStatuses.has(status)) {
     throw new InvalidEquipmentStatusError(status);
@@ -94,6 +98,10 @@ export function buildEquipmentUpdate(
     "laborCostCents" in payload
       ? parseOptionalCents(payload.laborCostCents, "mano de obra")
       : undefined;
+  if ((partsCostCents !== undefined || laborCostCents !== undefined) &&
+      (partsCostCents ?? current.partsCostCents) + (laborCostCents ?? current.laborCostCents) > MAX_MONEY_CENTS) {
+    throw new InvalidMoneyValueError("total");
+  }
   const finalStatus = status || current.status;
   const costsChanged =
     (partsCostCents !== undefined &&
@@ -196,6 +204,7 @@ export function buildEquipmentUpdate(
       partsCostCents ?? current.partsCostCents ?? 0,
       laborCostCents ?? current.laborCostCents ?? 0,
     );
+    if (totals.totalCents > MAX_MONEY_CENTS) throw new InvalidMoneyValueError("total");
     values.invoiceSubtotalCents = totals.subtotalCents;
 
     if (issuingInvoice) {
@@ -228,5 +237,8 @@ export function buildEquipmentUpdate(
     }
   }
 
+  if (typeof values.invoiceTotalCents === "number" && values.invoiceTotalCents > MAX_MONEY_CENTS) {
+    throw new InvalidMoneyValueError("total de la factura");
+  }
   return values;
 }
