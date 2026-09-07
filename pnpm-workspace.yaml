@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild: true
+  sharp: true
+  # Sites usa workerd para desarrollar y compilar su Worker.
+  workerd: true

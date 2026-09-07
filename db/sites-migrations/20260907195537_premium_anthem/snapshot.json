@@ -1,0 +1,420 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "e677c301-a077-4081-9337-d2b2d7d6ca77",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
+  "ddl": [
+    {
+      "name": "equipment",
+      "entityType": "tables"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "order_number",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_number",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "customer_name",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "customer_phone",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "customer_email",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "equipment_type",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'Sin asignar'",
+      "generated": null,
+      "name": "assigned_technician",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "brand",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "model",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "serial_number",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "accessories",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reported_issue",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "diagnosis",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "damage_notes",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "parts_description",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "parts_cost_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'Servicio técnico / mano de obra'",
+      "generated": null,
+      "name": "labor_description",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "labor_cost_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'ingreso'",
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "entry_date",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exit_date",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_subtotal_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_tax_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_total_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_tax_rate",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "30",
+      "generated": null,
+      "name": "warranty_days",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "notes",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "CURRENT_TIMESTAMP",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "CURRENT_TIMESTAMP",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "equipment_pk",
+      "table": "equipment",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "updated_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_updated_at_id",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "status",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_status",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "exit_date",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_exit_date",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "status",
+          "isExpression": false
+        },
+        {
+          "value": "entry_date",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_status_entry_date",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "customer_name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_customer_name",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        "order_number"
+      ],
+      "nameExplicit": false,
+      "name": "equipment_order_number_unique",
+      "entityType": "uniques",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        "invoice_number"
+      ],
+      "nameExplicit": false,
+      "name": "equipment_invoice_number_unique",
+      "entityType": "uniques",
+      "table": "equipment"
+    }
+  ],
+  "renames": []
+}

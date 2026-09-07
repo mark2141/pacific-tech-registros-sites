@@ -1,0 +1,45 @@
+[build]
+  # Solo compila. Las migraciones ya no van encadenadas aquí: Netlify Database
+  # aplica por su cuenta lo que haya en netlify/database/migrations/ justo antes
+  # de publicar el deploy, y falla la publicación si alguna no pasa.
+  #
+  # En Cloudflare corrían dentro de la ruta de request y costaban un viaje a D1
+  # en cada arranque en frío; ahora ocurren una sola vez y fuera del build, así
+  # que un problema de base de datos ya no se disfraza de error de compilación.
+  command = "pnpm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Cada deploy preview recibe su propia rama de base de datos, con una copia de
+# los datos de producción. Netlify la crea y la migra sola; lo que se escriba
+# allí nunca toca la base principal.
+[context.deploy-preview.environment]
+  AUTH_PROVIDER = "netlify-identity"
+
+[context.branch-deploy.environment]
+  AUTH_PROVIDER = "netlify-identity"
+
+# La lista de precios ya no vive en public/: /precios/ es una ruta dinámica que
+# valida la misma sesión de Identity que el registro. La propia respuesta pone
+# no-store y X-Robots-Tag, pues las reglas de cabeceras no se aplican de forma
+# fiable a lo que devuelve una Function.
+
+# Las mismas cabeceras que aplica proxy.ts, repetidas para los archivos
+# estáticos que se sirven desde el CDN sin pasar por la Function.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+
+# Aquí no se declara Cache-Control para /api/*. Las dos rutas ya la mandan en
+# sus propias respuestas, que es lo que de verdad cuenta: estas reglas no se
+# aplican de forma fiable a lo que devuelve una Function. Repetirla además
+# chocaba de grafía con el `cache-control` en minúsculas que Nitro escribe en
+# dist/_headers, y el build avisaba de la cabecera duplicada.
