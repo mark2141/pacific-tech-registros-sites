@@ -14,6 +14,8 @@ import {
 import { orderNumberPrefix } from "../../../lib/order-number";
 import { todayInPanama } from "../../../lib/panama-date";
 import { getAuthUser } from "../../auth";
+import { can, canEditPayload } from "../../../lib/permissions";
+import { PaymentError } from "../../../lib/payments";
 import {
   InvalidContactValueError,
   parseOptionalCustomerEmail,
@@ -39,6 +41,7 @@ function json(body: unknown, status = 200) {
 // El detalle del error solo va al log del Worker: los mensajes de D1 y Drizzle
 // exponen SQL y nombres de tabla que no deben salir por HTTP.
 function routeError(error: unknown) {
+  if (error instanceof PaymentError) return json({ error: error.message }, error.status);
   console.error("Error en /api/equipment:", error);
 
   if (isUniqueConstraintError(error)) {
@@ -87,7 +90,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await getAuthUser();
-    if (!user) return unauthorized();
+    if (!user || !can(user.role, "receive")) return unauthorized();
     const payload = await readEquipmentPayload(request);
     const customerName = clean(payload.customerName);
     const equipmentType = clean(payload.equipmentType);
@@ -136,6 +139,7 @@ export async function PATCH(request: Request) {
     const user = await getAuthUser();
     if (!user) return unauthorized();
     const payload = await readEquipmentPayload(request);
+    if (!canEditPayload(user.role, payload)) return unauthorized();
     const id = Number(payload.id);
     if ((typeof payload.id !== "number" && typeof payload.id !== "string") || !/^[0-9]+$/.test(String(payload.id)) || !Number.isInteger(id) || id < 1 || id > 2_147_483_647) {
       return json({ error: "Registro inválido." }, 400);

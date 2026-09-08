@@ -108,8 +108,8 @@ El resumen de indicadores puede imprimirse o guardarse como PDF. Las rutas de
 reporte y descarga requieren sesión y envían `private, no-store`.
 
 Con la vista previa local abierta, `pnpm run test:tracking:local` comprueba estos
-flujos con datos ficticios y deja las órdenes creadas anuladas. Pagos parciales,
-permisos por función y portal del cliente siguen pendientes.
+flujos con datos ficticios y deja las órdenes creadas anuladas. El portal del cliente
+sigue pendiente; los pagos y permisos se describen abajo.
 
 ## Inventario de repuestos
 
@@ -134,9 +134,73 @@ de compra no modifica los precios facturados al cliente ni las notas anteriores.
 Las tablas `inventory_items` e `inventory_movements` tienen migraciones equivalentes
 en PostgreSQL y D1. Las operaciones de stock y auditoría comparten transacción;
 la implementación D1 usa lotes atómicos y actualizaciones condicionadas por versión.
-La autenticación es la misma que la del registro; este bloque no agrega roles.
+La autenticación es la misma que la del registro; los permisos por función también
+protegen las operaciones del inventario.
 
 `pnpm run test:inventory:local` prueba consumos simultáneos, reintentos sin duplicados,
 devoluciones acotadas, costos históricos y acceso privado con datos ficticios.
 Deja el repuesto de prueba en la base local y la orden anulada. La publicación
 incluye sólo código y migraciones; no lleva esos datos al Site o a Netlify.
+
+## Roles y permisos
+
+`APP_USER_ROLES` es un objeto JSON en el entorno del servidor que asigna un ID de
+usuario verificado o un correo en minúsculas a `admin`, `recepcion`, `tecnico` o
+`lectura`. Un ID explícito prevalece sobre el correo. No se aceptan roles enviados
+por el navegador. Una cuenta sin asignación o una configuración inválida obtiene
+solo lectura; el proveedor sigue siendo quien decide si puede acceder al sitio.
+
+Ejemplo: `{"dueño@ejemplo.com":"admin","recepcion@ejemplo.com":"recepcion","tecnico@ejemplo.com":"tecnico"}`.
+La asignación se administra en las variables de entorno de Sites o Netlify; esta
+versión no agrega una pantalla para invitar usuarios ni cambiar sus roles. Cambiar
+esta variable requiere publicar de nuevo. No concede acceso al Site ni invita a
+nadie: el acceso privado y Netlify Identity siguen siendo independientes.
+
+| Acción | Administrador | Recepción | Técnico | Solo lectura |
+| --- | --- | --- | --- | --- |
+| Consultar órdenes, costos, reportes, inventario y pagos | Sí | Sí | Sí | Sí |
+| Ingresos, datos del cliente, importes, entrega, anulación/reapertura | Sí | Sí | No | No |
+| Diagnóstico, descripciones, plazo y estado operativo de órdenes abiertas | Sí | Sí | Sí | No |
+| Notas, contacto, consumo/devolución de repuestos | Sí | Sí | Sí | No |
+| Catálogo y entradas/salidas manuales de stock | Sí | Sí | No | No |
+| Registrar abonos | Sí | Sí | No | No |
+| Anular un pago registrado | Sí | No | No | No |
+
+El técnico puede trabajar sobre las órdenes abiertas del taller; no se limita la
+lectura ni el trabajo al nombre libre de «técnico asignado». Las órdenes entregadas
+o anuladas no pueden reabrirse o editarse con ese rol. Las devoluciones de piezas
+siguen permitidas en órdenes cerradas. Los campos bloqueados también se comprueban
+en la API y, para cambios de orden, dentro de la transacción/control de versión.
+
+Antes de implementar en **Netlify**, configura `APP_USER_ROLES` con las cuentas de
+Identity del taller y aplica las nuevas migraciones. No copies la identidad local
+de Sites a producción. Sin configuración todos los usuarios serán de solo lectura.
+Para Sites local, usa `.dev.vars` (ignorado):
+`APP_USER_ROLES='{"seedy@sites.test":"admin"}'`.
+
+## Abonos y saldos
+
+En cada orden, «Pagos y saldo» muestra importe, abonado y saldo; admite efectivo,
+transferencia, tarjeta, Yappy y otro, con concepto y referencia opcional. Antes de
+la entrega se cobra sobre el importe estimado **guardado**; después, sobre el total
+de la factura, conservando los impuestos históricos. No se permite cobrar de más,
+cobrar órdenes anuladas ni registrar importes negativos/fraccionarios en centavos.
+No procesa cargos bancarios: registra cobros realizados por el taller.
+
+Cada pago tiene identificador de reintento, fecha del servidor y autor. Administrador
+puede anular íntegramente un pago con motivo; se crea un asiento negativo vinculado
+al original y ambos se conservan. No hay borrado ni reembolsos bancarios automáticos.
+No se puede reducir el total por debajo de lo abonado, ni anular/reabrir una orden
+entregada con pagos vigentes. Para corregir un pago parcial: anular el original y
+registrar el importe correcto, con sus motivos.
+
+El acumulado `equipment.paid_cents`, el asiento de `payments` y el historial se
+guardan atómicamente. Pagos y ediciones comparten la versión de orden, de modo que
+dos cobros concurrentes no pueden superar su saldo. Los pagos antiguos no se
+deducen de las facturas: las órdenes existentes empiezan con cero pagos registrados.
+«Facturado este mes» sigue representando facturación, no caja. El listado muestra
+estado de pago y saldo; el detalle contiene el historial paginado y las anulaciones.
+
+Validación: `node tests/index.js`, `node scripts/check-role-routes.mjs` y
+`node scripts/check-payments-local.mjs` (este último necesita Sites local con rol
+administrador). Las órdenes de prueba se dejan anuladas y sus abonos revertidos.

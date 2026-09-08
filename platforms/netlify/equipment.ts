@@ -16,6 +16,8 @@ import {
   sql,
 } from "drizzle-orm";
 import { getDb } from "../../db";
+import { protectPaidOrder, PaymentError } from "../../lib/payments";
+import { canEditPayload } from "../../lib/permissions";
 import { equipment, equipmentHistory } from "../../db/schema";
 import { isUniqueConstraintError } from "../../lib/database-error";
 import { buildEquipmentUpdate } from "../../lib/equipment-update";
@@ -153,7 +155,9 @@ export async function updateEquipment(id: number, payload: Record<string, unknow
     const [current] = await tx.select().from(equipment).where(eq(equipment.id, id)).limit(1).for("update");
     if (!current) return null;
     if (current.version !== version) throw new EquipmentConflictError();
+    if (actor.role && !canEditPayload(actor.role, payload, current.status)) throw new PaymentError("Tu rol no permite modificar esta orden.", 403);
     const values = buildEquipmentUpdate(current, payload);
+    protectPaidOrder(current, values);
     const [updated] = await tx.update(equipment).set({ ...values, version: version + 1 })
       .where(and(eq(equipment.id, id), eq(equipment.version, version))).returning();
     if (!updated) throw new EquipmentConflictError();

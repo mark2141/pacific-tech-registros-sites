@@ -1,4 +1,5 @@
 "use client";
+import { can, type Role } from "../lib/permissions";
 
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { useModal } from "./use-modal";
@@ -29,7 +30,7 @@ export function useInventoryOperation() {
   };
 }
 type InventoryPage = { items: InventoryItem[]; total: number; nextCursor: number | null; summary: { total: number; lowStock: number; outOfStock: number } };
-export function InventoryPanel({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+export function InventoryPanel({ role, onClose, onChanged }: { role: Role; onClose: () => void; onChanged: () => void }) {
   const [search, setSearch] = useState("");
   const query = useDeferredValue(search.trim());
   const [lowOnly, setLowOnly] = useState(false);
@@ -85,7 +86,7 @@ export function InventoryPanel({ onClose, onChanged }: { onClose: () => void; on
     setSelected(item); setRefresh(value => value + 1); onChanged();
   }
   return <div ref={modalRef} className="inventory-backdrop" role="dialog" aria-modal="true" aria-labelledby="inventory-title">
-    <div className="inventory-toolbar"><button data-autofocus className="ghost-button" onClick={close}>← Volver</button><h2 id="inventory-title">Inventario de repuestos</h2><button className="primary-button" disabled={busy} onClick={() => choose(null)}>＋ Nuevo repuesto</button></div>
+    <div className="inventory-toolbar"><button data-autofocus className="ghost-button" onClick={close}>← Volver</button><h2 id="inventory-title">Inventario de repuestos</h2><button className="primary-button" disabled={busy || !can(role, "stock")} onClick={() => choose(null)}>＋ Nuevo repuesto</button></div>
     <div className="inventory-content">
       {page && <div className="inventory-summary"><span><strong>{page.summary.total}</strong> repuestos</span><button className="stock-alert" onClick={() => setLowOnly(true)}>{page.summary.lowStock} con stock bajo · {page.summary.outOfStock} sin existencias</button></div>}
       <div className="inventory-layout"><section className="inventory-list">
@@ -95,13 +96,13 @@ export function InventoryPanel({ onClose, onChanged }: { onClose: () => void; on
         <div className="table-wrap"><table><thead><tr><th>Repuesto</th><th>Existencias</th><th>Costo compra</th></tr></thead><tbody>{page?.items.map(item => <tr key={item.id} className={selected?.id === item.id ? "inventory-selected" : ""}><td><button className="order-link" onClick={() => choose(item)}>{item.sku} · {item.name}</button><small>{item.supplier || "Sin proveedor"}</small></td><td><strong>{item.stock}</strong><small>Mínimo: {item.minimumStock}</small>{item.stock <= item.minimumStock && <span className="stock-low">{item.stock === 0 ? "Sin existencias" : "Stock bajo"}</span>}</td><td>{formatMoney(item.unitCostCents)}</td></tr>)}{!loading && !page?.items.length && <tr><td colSpan={3}>No hay repuestos para estos filtros. Crea un repuesto para registrar existencias.</td></tr>}</tbody></table></div>
         {loading && <p role="status">Cargando inventario…</p>}{page && <p className="field-hint">{page.items.length} de {page.total} repuestos</p>}{page?.nextCursor && <button className="secondary-button" disabled={loading || query !== search.trim()} onClick={() => void more()}>Cargar más</button>}
       </section>
-      {editing ? <InventoryEditor key={editorKey} item={selected} busy={busy} onBusy={setBusy} onDirty={setDirty} onSaved={saved} onReload={reloadItem} /> : <aside className="inventory-editor"><h3>Control de existencias</h3><p>Selecciona un repuesto para editarlo, registrar entradas o salidas y consultar sus movimientos.</p><p>Para utilizarlo en una reparación, abre la orden y entra en «Repuestos del inventario».</p></aside>}
+      {editing ? <InventoryEditor role={role} key={editorKey} item={selected} busy={busy} onBusy={setBusy} onDirty={setDirty} onSaved={saved} onReload={reloadItem} /> : <aside className="inventory-editor"><h3>Control de existencias</h3><p>Selecciona un repuesto para editarlo, registrar entradas o salidas y consultar sus movimientos.</p><p>Para utilizarlo en una reparación, abre la orden y entra en «Repuestos del inventario».</p></aside>}
       </div>
     </div>
   </div>;
 }
 
-function InventoryEditor({ item, busy, onBusy, onDirty, onSaved, onReload }: { item: InventoryItem | null; busy: boolean; onBusy: (busy: boolean) => void; onDirty: (dirty: boolean) => void; onSaved: (item: InventoryItem) => void; onReload: () => Promise<void> }) {
+function InventoryEditor({ role, item, busy, onBusy, onDirty, onSaved, onReload }: { role: Role; item: InventoryItem | null; busy: boolean; onBusy: (busy: boolean) => void; onDirty: (dirty: boolean) => void; onSaved: (item: InventoryItem) => void; onReload: () => Promise<void> }) {
   const [form, setForm] = useState(() => ({ sku: item?.sku ?? "", name: item?.name ?? "", supplier: item?.supplier ?? "", cost: centsToDollarInput(item?.unitCostCents ?? 0), minimum: String(item?.minimumStock ?? 0), initial: "0" }));
   const [baseline, setBaseline] = useState(form);
   const [quantity, setQuantity] = useState(""); const [note, setNote] = useState(""); const [kind, setKind] = useState<"entrada" | "salida">("entrada");
@@ -132,8 +133,8 @@ function InventoryEditor({ item, busy, onBusy, onDirty, onSaved, onReload }: { i
   }
   return <aside className="inventory-editor"><div className="history-heading"><h3>{item ? item.sku : "Nuevo repuesto"}</h3>{item && <button className="ghost-button" disabled={busy} onClick={() => void onReload()}>Recargar datos</button>}</div>
     {notice && <p className={notice.error ? "field-error" : "field-hint"} role={notice.error ? "alert" : "status"}>{notice.text}</p>}
-    <form onSubmit={saveMetadata}><fieldset disabled={busy}><label>Código único<input required maxLength={60} pattern="[A-Za-z0-9._\-]+" value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="Ej. PANT-IP13" /></label><label>Nombre<input required maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label><label>Proveedor<input maxLength={120} value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} /></label><div className="form-grid"><label>Costo de compra (USD)<input required type="number" min="0" max="21474836.47" step="0.01" value={form.cost} onChange={e => setForm({ ...form, cost: e.target.value })} /></label><label>Stock mínimo<input required type="number" min="0" max="1000000" step="1" value={form.minimum} onChange={e => setForm({ ...form, minimum: e.target.value })} /></label></div>{!item && <label>Existencias iniciales<input required type="number" min="0" max="1000000" step="1" value={form.initial} onChange={e => setForm({ ...form, initial: e.target.value })} /></label>}<button className="primary-button" disabled={busy}>Guardar repuesto</button></fieldset></form>
-    {item && <><h3>Existencias: {item.stock}</h3><form onSubmit={adjust}><fieldset disabled={busy}><div className="form-grid"><label>Movimiento<select value={kind} onChange={e => setKind(e.target.value as "entrada" | "salida")}><option value="entrada">Entrada</option><option value="salida">Salida / ajuste</option></select></label><label>Cantidad<input required type="number" min="1" max={kind === "salida" ? item.stock : 1000000 - item.stock} step="1" value={quantity} onChange={e => setQuantity(e.target.value)} /></label></div><label>Motivo<input required maxLength={500} value={note} onChange={e => setNote(e.target.value)} placeholder="Compra, conteo físico, merma…" /></label><button className="secondary-button" disabled={busy}>Registrar movimiento</button></fieldset></form><InventoryHistory item={item} /></>}
+    <form onSubmit={saveMetadata}><fieldset disabled={busy || !can(role, "stock")}><label>Código único<input required maxLength={60} pattern="[A-Za-z0-9._\-]+" value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="Ej. PANT-IP13" /></label><label>Nombre<input required maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label><label>Proveedor<input maxLength={120} value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} /></label><div className="form-grid"><label>Costo de compra (USD)<input required type="number" min="0" max="21474836.47" step="0.01" value={form.cost} onChange={e => setForm({ ...form, cost: e.target.value })} /></label><label>Stock mínimo<input required type="number" min="0" max="1000000" step="1" value={form.minimum} onChange={e => setForm({ ...form, minimum: e.target.value })} /></label></div>{!item && <label>Existencias iniciales<input required type="number" min="0" max="1000000" step="1" value={form.initial} onChange={e => setForm({ ...form, initial: e.target.value })} /></label>}<button className="primary-button" disabled={busy}>Guardar repuesto</button></fieldset></form>
+    {item && <><h3>Existencias: {item.stock}</h3><form onSubmit={adjust}><fieldset disabled={busy || !can(role, "stock")}><div className="form-grid"><label>Movimiento<select value={kind} onChange={e => setKind(e.target.value as "entrada" | "salida")}><option value="entrada">Entrada</option><option value="salida">Salida / ajuste</option></select></label><label>Cantidad<input required type="number" min="1" max={kind === "salida" ? item.stock : 1000000 - item.stock} step="1" value={quantity} onChange={e => setQuantity(e.target.value)} /></label></div><label>Motivo<input required maxLength={500} value={note} onChange={e => setNote(e.target.value)} placeholder="Compra, conteo físico, merma…" /></label><button className="secondary-button" disabled={busy}>Registrar movimiento</button></fieldset></form><InventoryHistory item={item} /></>}
     {dirty && <p className="unsaved-hint">Cambios sin guardar</p>}
   </aside>;
 }

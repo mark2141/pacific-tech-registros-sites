@@ -386,3 +386,13 @@ textarea { resize: vertical; min-height: 78px; line-height: 1.4; }
 .order-parts-list button { justify-self: start; }
 @media (max-width: 960px) { .inventory-layout { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) { .inventory-toolbar { flex-wrap: wrap; padding: 12px; } .inventory-toolbar h2 { font-size: 16px; } .inventory-content { padding: 12px; } .inventory-list, .inventory-editor { padding: 14px; } .order-inventory { margin-inline: 20px; } }
+/* Subtle accents; payment information stays legible on plain surfaces. */
+.order-payments { padding: 22px 28px; border-top: 1px solid #dce5f1; }
+.payment-summary { display: flex; flex-wrap: wrap; gap: 16px; padding: 14px; margin-bottom: 16px; border: 1px solid #dce5f1; border-radius: 10px; }
+.payment-summary span { display: grid; gap: 5px; flex: 1; color: #52647c; }
+.payment-summary strong { color: #142943; white-space: nowrap; }
+.payment-state { color: #175bb0; font-size: 13px; align-self: center; }
+.access-help { margin-top: 12px; max-width: 650px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.access-help summary { cursor: pointer; color: var(--blue-dark); }
+.order-payments fieldset { display: grid; gap: 12px; border: 1px solid #dce5f1; border-radius: 10px; padding: 14px; margin: 0; min-width: 0; }
+.order-payments legend { color: #294666; padding: 0 5px; }

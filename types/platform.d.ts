@@ -1,4 +1,8 @@
 // Vite selects the implementation; these declarations only define its contract.
+declare module "@platform/payments" {
+  export const listPayments: typeof import("../platforms/netlify/payments").listPayments;
+  export const recordPayment: typeof import("../platforms/netlify/payments").recordPayment;
+}
 // A tsconfig path would override the selected Sites alias in Vinext.
 declare module "@platform/auth" {
   export const getAuthUser: typeof import("../platforms/netlify/auth").getAuthUser;

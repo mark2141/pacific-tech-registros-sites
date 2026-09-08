@@ -43,6 +43,7 @@ export const equipment = pgTable(
     exitDate: text("exit_date"),
     estimatedExitDate: text("estimated_exit_date"),
     version: integer("version").notNull().default(1),
+    paidCents: integer("paid_cents").notNull().default(0),
     invoiceSubtotalCents: integer("invoice_subtotal_cents"),
     invoiceTaxCents: integer("invoice_tax_cents"),
     invoiceTotalCents: integer("invoice_total_cents"),
@@ -59,6 +60,7 @@ export const equipment = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check("equipment_paid_nonnegative", sql`${table.paidCents} >= 0`),
     // Se conserva para consultas cronológicas y auditoría. El listado operativo
     // pagina por la clave primaria `id`, inmutable frente a ediciones.
     index("idx_equipment_updated_at_id").on(table.updatedAt, table.id),
@@ -70,6 +72,21 @@ export const equipment = pgTable(
     index("idx_equipment_customer_name").on(table.customerName),
   ],
 );
+
+export const payments = pgTable("payments", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  operationId: text("operation_id").notNull().unique(),
+  equipmentId: integer("equipment_id").notNull().references(() => equipment.id),
+  amountCents: integer("amount_cents").notNull(),
+  method: text("method").notNull(),
+  reference: text("reference").notNull().default(""),
+  note: text("note").notNull(),
+  reversalOf: integer("reversal_of").unique(),
+  actorUserId: text("actor_user_id").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [index("idx_payments_equipment").on(table.equipmentId, table.id),
+  check("payment_sign", sql`(${table.amountCents} > 0 AND ${table.reversalOf} IS NULL) OR (${table.amountCents} < 0 AND ${table.reversalOf} IS NOT NULL)`)]);
 
 // Append-only events. Original notes remain on equipment for legacy records.
 export const equipmentHistory = pgTable("equipment_history", {

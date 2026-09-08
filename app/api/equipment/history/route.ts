@@ -1,6 +1,7 @@
 import { getEquipment, listEquipmentHistory, addEquipmentNote, getLastEquipmentContact } from "@platform/equipment";
 import { contactEventMessage } from "../../../../lib/customer-message";
 import { getAuthUser } from "../../../auth";
+import { can } from "../../../../lib/permissions";
 import { InvalidEquipmentQueryError, parseEquipmentCursor } from "../../../../lib/equipment-query";
 import { InvalidEquipmentPayloadError, readEquipmentPayload } from "../../../../lib/equipment-validation";
 import { parseHistoryNote } from "../../../../lib/equipment-tracking";
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await getAuthUser();
-    if (!user) return json({ error: "Acceso denegado." }, 403);
+    if (!user || !can(user.role, "note")) return json({ error: "Acceso denegado." }, 403);
     const payload = await readEquipmentPayload(request);
     if (typeof payload.equipmentId !== "number" && typeof payload.equipmentId !== "string") throw new InvalidEquipmentQueryError("Registro inválido.");
     const { id } = parseEquipmentCursor(String(payload.equipmentId));

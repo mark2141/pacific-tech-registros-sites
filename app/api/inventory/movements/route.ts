@@ -1,6 +1,7 @@
 import { getInventoryItem, listInventoryMovements, listOrderParts, moveInventory } from "@platform/inventory";
 import { getEquipment } from "@platform/equipment";
 import { getAuthUser } from "../../../auth";
+import { can } from "../../../../lib/permissions";
 import { InventoryError, inventoryParamId, movementInput } from "../../../../lib/inventory";
 import { readEquipmentPayload } from "../../../../lib/equipment-validation";
 import { inventoryFailure, inventoryJson as json } from "../response";
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   try {
     const user = await getAuthUser(); if (!user) return json({ error: "Acceso denegado." }, 403);
     const input = movementInput(await readEquipmentPayload(request));
+    if (!can(user.role, input.equipmentId ? "consume" : "stock")) return json({ error: "Tu rol no permite este movimiento." }, 403);
     return json(await moveInventory(input, user));
   } catch (error) { return inventoryFailure(error); }
 }

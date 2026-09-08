@@ -27,6 +27,7 @@ export default async function Home() {
     <RegistryClient
       previewLabel={previewLabel}
       userEmail={user.email}
+      role={user.role}
       signOutPath={signOutPath()}
       business={resolveBusinessInfo(getEnv())}
     />

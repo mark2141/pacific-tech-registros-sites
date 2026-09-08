@@ -22,3 +22,4 @@ import "./equipment-confirmation.test.mjs";
 import "./equipment-tracking.test.mjs";
 import "./equipment-reports.test.mjs";
 import "./inventory.test.mjs";
+import "./payments-permissions.test.mjs";

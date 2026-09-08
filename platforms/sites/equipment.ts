@@ -6,6 +6,8 @@ import { buildEquipmentUpdate } from "../../lib/equipment-update";
 import { escapeLikePattern, serializeEquipmentCursor } from "../../lib/equipment-query";
 import { todayInPanama } from "../../lib/panama-date";
 import { getSitesDb } from "./database";
+import { protectPaidOrder, PaymentError } from "../../lib/payments";
+import { canEditPayload } from "../../lib/permissions";
 
 // Only these application-owned column names enter SQL. Values are always bound.
 const columns = {
@@ -19,7 +21,7 @@ const columns = {
   entryDate: "entry_date", exitDate: "exit_date", invoiceSubtotalCents: "invoice_subtotal_cents",
   invoiceTaxCents: "invoice_tax_cents", invoiceTotalCents: "invoice_total_cents",
   invoiceTaxRate: "invoice_tax_rate", warrantyDays: "warranty_days", notes: "notes",
-  version: "version", estimatedExitDate: "estimated_exit_date",
+  version: "version", estimatedExitDate: "estimated_exit_date", paidCents: "paid_cents",
   createdAt: "created_at", updatedAt: "updated_at",
 } as const;
 
@@ -107,7 +109,9 @@ export async function updateEquipment(id: number, payload: Record<string, unknow
   const current = await getEquipment(id);
   if (!current) return null;
   if (current.version !== version) throw new EquipmentConflictError();
+  if (actor.role && !canEditPayload(actor.role, payload, current.status)) throw new PaymentError("Tu rol no permite modificar esta orden.", 403);
   const values: Record<string, string | number | Date | null> = { ...buildEquipmentUpdate(current, payload), version: version + 1 };
+  protectPaidOrder(current, values);
   const entries = Object.entries(values).map(([key, value]) => {
     const column = columns[key as keyof typeof columns];
     if (!column) throw new Error("Campo de actualización desconocido.");

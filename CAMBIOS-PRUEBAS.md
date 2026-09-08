@@ -1,5 +1,22 @@
 # Primera revisión: cuatro cambios pequeños
 
+## Revisión actual: permisos y pagos
+
+- Tu cuenta de Sites tiene rol Administrador; aparece junto al correo. «Mi acceso»
+  resume las funciones. Los roles de otras cuentas se asignan en el entorno del
+  servidor, con las instrucciones de `SITES-Y-NETLIFY.md`.
+- Abre una orden, guarda un importe de servicio y usa «Pagos y saldo». Registra un
+  abono menor al total: deben actualizarse abonado, saldo y estado «Pago parcial».
+- Completa el saldo: debe decir «Pagado». Intenta cobrar más: debe impedirlo.
+- Anula un pago indicando motivo: el original se conserva marcado «Anulado» y
+  aparece su asiento de anulación; el saldo vuelve a aumentar.
+- Con pagos vigentes, intenta anular la orden o reducir el total por debajo de lo
+  abonado: se explica por qué no se permite. Las facturas previas no se marcan como
+  cobradas automáticamente.
+- El diseño sigue con fondos lisos y acentos discretos en bordes y botones.
+
+## Alcance de la primera revisión
+
 Los cuatro bloques comparten código entre Sites y Netlify. No requieren migraciones
 ni incorporan pagos, inventario o un nuevo modelo de facturación.
 

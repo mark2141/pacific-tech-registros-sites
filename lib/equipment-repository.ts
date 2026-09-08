@@ -10,4 +10,4 @@ export type NewEquipmentInput = Pick<EquipmentRow,
   "serialNumber" | "estimatedExitDate" | "warrantyDays"
 >;
 
-export type EquipmentActor = { userId: string; email: string };
+export type EquipmentActor = { userId: string; email: string; role?: import("./permissions").Role };

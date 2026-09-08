@@ -8,6 +8,8 @@
  */
 
 export type RuntimeEnv = {
+  /** JSON: identidad verificada (ID o correo en minúsculas) → rol. */
+  APP_USER_ROLES?: string;
   // Ni la conexión a Postgres ni el secreto de Identity aparecen aquí. La
   // primera la inyecta Netlify Database en NETLIFY_DB_URL y la lee db/index.ts,
   // que es el único sitio que la necesita; el segundo dejó de existir cuando la
