@@ -80,7 +80,7 @@ export function EquipmentHistory({ equipmentId, version, legacyNote, note, onNot
     {error && <p className="field-error" role="alert">{error}</p>}
     {notice && <p className="field-hint" role="status">{notice}</p>}
     <ol className="history-list">{events.map(event => <li key={event.id}>
-      <strong>{event.kind === "pago" ? "Movimiento de pago" : event.kind === "nota" ? "Nota" : event.kind === "repuesto" ? "Movimiento de repuesto" : event.kind === "contacto" ? "Contacto registrado" : event.kind === "ingreso" ? "Ingreso registrado" : `${labels[event.fromStatus || ""] || event.fromStatus} → ${labels[event.toStatus || ""] || event.toStatus}`}</strong>
+      <strong>{event.kind === "adjunto" ? "Archivo adjunto" : event.kind === "pago" ? "Movimiento de pago" : event.kind === "nota" ? "Nota" : event.kind === "repuesto" ? "Movimiento de repuesto" : event.kind === "contacto" ? "Contacto registrado" : event.kind === "ingreso" ? "Ingreso registrado" : `${labels[event.fromStatus || ""] || event.fromStatus} → ${labels[event.toStatus || ""] || event.toStatus}`}</strong>
       {event.message && <p>{event.message}</p>}
       <small><time dateTime={event.createdAt}>{eventDate(event.createdAt)}</time> · {event.actorEmail || "Usuario autenticado"}</small>
     </li>)}</ol>

@@ -132,3 +132,18 @@ export const inventoryMovements = pgTable("inventory_movements", {
   index("idx_inventory_movements_equipment").on(table.equipmentId, table.id),
   index("idx_inventory_movements_source").on(table.sourceMovementId),
   check("inventory_movement_nonzero", sql`${table.quantity} != 0`)]);
+export const attachments = pgTable("attachments", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  operationId: text("operation_id").notNull().unique(),
+  equipmentId: integer("equipment_id").notNull().references(() => equipment.id),
+  objectKey: text("object_key").notNull().unique(),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  sha256: text("sha256").notNull(),
+  stage: text("stage").notNull(),
+  caption: text("caption").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [index("idx_attachments_equipment").on(table.equipmentId, table.id)]);

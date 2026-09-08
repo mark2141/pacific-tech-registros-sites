@@ -4,6 +4,8 @@
 #
 # Hace un pg_dump completo y lo guarda comprimido, con la fecha en el nombre,
 # en una carpeta local. No sube nada a ningún sitio ni toca la base: solo lee.
+# Incluye metadatos de adjuntos; los bytes de Netlify Blobs requieren una copia
+# separada del almacén pacific-tech-attachments.
 #
 # La cadena de conexión sale de:
 #

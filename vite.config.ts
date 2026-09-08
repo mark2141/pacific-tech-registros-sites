@@ -18,6 +18,7 @@ export default defineConfig(async () => {
       config: {
         main: "vinext/server/fetch-handler",
         compatibility_flags: ["nodejs_compat"],
+        r2_buckets: [{ binding: "FILES", bucket_name: "pacific-tech-files-local" }],
         d1_databases: [{
           binding: "DB",
           database_name: "pacific-tech-sites-local",

@@ -42,6 +42,8 @@ import { CustomerContact } from "./customer-contact";
 import { InventoryPanel } from "./inventory-client";
 import { OrderInventory } from "./order-inventory";
 import { OrderPayments } from "./order-payments";
+import { OrderAttachments } from "./order-attachments";
+import { BackupDownload } from "./backup-download";
 import { can, roleLabels, technicianFields, type Role } from "../lib/permissions";
 import { balance } from "../lib/payments";
 import { ReceptionReceipt } from "./reception-receipt";
@@ -564,6 +566,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
         <article className="metric"><div className="metric-icon cyan">$</div><div><span>Facturado este mes</span><strong>{formatMoney(monthRevenueCents)}</strong><small>Facturas no fiscales</small></div></article>
       </section>
 
+      {role === "admin" && <BackupDownload />}
       {notice && <div className={notice.error ? "notice error" : "notice"} role={notice.error ? "alert" : "status"}><span>{notice.text}</span><button onClick={() => setNotice(null)} aria-label="Cerrar mensaje">×</button></div>}
 
       <section className="records-card">
@@ -672,7 +675,9 @@ function DetailDrawer({ role, record, saving, errorMessage, onClose, onUpdate, o
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentDirty, setPaymentDirty] = useState(false);
   const editable = can(role, "edit") && !(role === "tecnico" && ["entregado", "anulado"].includes(record.status));
-  const busy = saving || noteSaving || contactSaving || inventoryBusy || paymentBusy;
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [attachmentDirty, setAttachmentDirty] = useState(false);
+  const busy = saving || noteSaving || contactSaving || inventoryBusy || paymentBusy || attachmentBusy;
   const [warrantyInput, setWarrantyInput] = useState(String(record.warrantyDays));
   const warrantyValid = /^\d+$/.test(warrantyInput) && Number(warrantyInput) <= 3650;
   const [partsCostInput, setPartsCostInput] = useState(centsToDollarInput(record.partsCostCents));
@@ -710,7 +715,7 @@ function DetailDrawer({ role, record, saving, errorMessage, onClose, onUpdate, o
       ? "" : record[key as keyof Equipment];
     return value !== original;
   });
-  const dirty = orderDirty || inventoryDirty || contactDirty || paymentDirty || Boolean(note.trim());
+  const dirty = orderDirty || inventoryDirty || contactDirty || paymentDirty || attachmentDirty || Boolean(note.trim());
   useUnsavedChanges(dirty || busy);
   function requestClose() {
     if (busy || (dirty && !confirmDiscardChanges())) return;
@@ -738,6 +743,7 @@ function DetailDrawer({ role, record, saving, errorMessage, onClose, onUpdate, o
       {errorMessage && <p className="field-error" role="alert">{errorMessage}</p>}
       {conflict && <div className="conflict-message" role="alert"><strong>Esta orden tiene cambios más recientes.</strong><p>Puedes copiar tus cambios antes de cargar la versión actual. Al cargarla se reemplazará este formulario.</p><button type="button" className="secondary-button" onClick={() => { if (!dirty || confirmDiscardChanges()) void onReload(); }}>Cargar versión actual</button></div>}
       <button type="button" className="secondary-button" onClick={() => { if (!dirty || confirmDiscardChanges()) onShowReceipt(); }}>Comprobante de ingreso</button>
+      <a className="secondary-button" href={`/cliente?orden=${record.id}`} target="_blank" rel="noopener noreferrer">Vista del cliente (privada)</a>
       <div className="detail-facts"><span><b>Modelo</b>{record.model || "-"}</span><span><b>Ingreso</b>{formatDate(record.entryDate)}</span><span><b>Accesorios</b>{record.accessories || "Ninguno"}</span></div>
       <div className="issue"><b>Falla reportada</b><p>{record.reportedIssue}</p>{record.damageNotes && <small>Daños visibles: {record.damageNotes}</small>}</div>
       <label>Técnico asignado<input disabled={!editable || role === "tecnico"} maxLength={EQUIPMENT_TEXT_FIELDS.assignedTechnician.max} value={draft.assignedTechnician} onChange={(e) => setDraft({ ...draft, assignedTechnician: e.target.value })} placeholder="Sin asignar" /></label>
@@ -766,12 +772,13 @@ function DetailDrawer({ role, record, saving, errorMessage, onClose, onUpdate, o
 
       <fieldset disabled={!editable} className="cost-box"><h3>Costos del servicio</h3><label>Descripción de piezas<input maxLength={EQUIPMENT_TEXT_FIELDS.partsDescription.max} value={draft.partsDescription} onChange={(e) => setDraft({ ...draft, partsDescription: e.target.value })} placeholder="Pieza o repuesto utilizado" /></label><label className="money-field">Precio de piezas<input disabled={role === "tecnico"} type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={partsCostCents === null} value={partsCostInput} onChange={(e) => setPartsCostInput(e.target.value)} /></label><label>Descripción de mano de obra<input maxLength={EQUIPMENT_TEXT_FIELDS.laborDescription.max} value={draft.laborDescription} onChange={(e) => setDraft({ ...draft, laborDescription: e.target.value })} placeholder="Ej. Diagnóstico, instalación o limpieza" /></label><label className="money-field">Mano de obra<input disabled={role === "tecnico"} type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={laborCostCents === null} value={laborCostInput} onChange={(e) => setLaborCostInput(e.target.value)} /></label>{!costsValid && <p className="field-error" role="alert">Ingresa montos válidos, mayores o iguales a cero y con máximo dos decimales y un total de hasta $21,474,836.47.</p>}{costsValid && <div className="cost-summary"><div className="total-row"><span>Total estimado</span><strong>{formatMoney(totals.totalCents)}</strong></div></div>}</fieldset>
     </fieldset>
-    <OrderPayments equipmentId={record.id} role={role} disabled={saving || noteSaving || contactSaving || inventoryBusy || orderDirty || inventoryDirty || contactDirty || Boolean(note.trim())} onBusy={setPaymentBusy} onDirty={setPaymentDirty} onSaved={onReload} />
-    <OrderInventory equipmentId={record.id} status={record.status} disabled={saving || noteSaving || contactSaving || paymentBusy || !can(role, "consume")} onBusy={setInventoryBusy} onDirty={setInventoryDirty} onChanged={() => { setHistoryRefresh(value => value + 1); onInventoryChanged(); }} />
-    <CustomerContact record={record} company={company} disabled={saving || noteSaving || inventoryBusy || paymentBusy || !can(role, "note")} onBusyChange={setContactSaving} onDirtyChange={setContactDirty} onSaved={() => setHistoryRefresh(value => value + 1)} />
-    <EquipmentHistory equipmentId={record.id} version={record.version + historyRefresh} legacyNote={record.notes} note={note} onNoteChange={setNote} disabled={saving || contactSaving || inventoryBusy || paymentBusy || !can(role, "note")} onBusyChange={setNoteSaving} />
+    <OrderAttachments equipmentId={record.id} disabled={saving || noteSaving || contactSaving || inventoryBusy || paymentBusy} canUpload={can(role, "note")} onBusy={setAttachmentBusy} onDirty={setAttachmentDirty} onSaved={() => setHistoryRefresh(v => v + 1)} />
+    <OrderPayments equipmentId={record.id} role={role} disabled={attachmentBusy || attachmentDirty || saving || noteSaving || contactSaving || inventoryBusy || orderDirty || inventoryDirty || contactDirty || Boolean(note.trim())} onBusy={setPaymentBusy} onDirty={setPaymentDirty} onSaved={onReload} />
+    <OrderInventory equipmentId={record.id} status={record.status} disabled={attachmentBusy || saving || noteSaving || contactSaving || paymentBusy || !can(role, "consume")} onBusy={setInventoryBusy} onDirty={setInventoryDirty} onChanged={() => { setHistoryRefresh(value => value + 1); onInventoryChanged(); }} />
+    <CustomerContact record={record} company={company} disabled={attachmentBusy || saving || noteSaving || inventoryBusy || paymentBusy || !can(role, "note")} onBusyChange={setContactSaving} onDirtyChange={setContactDirty} onSaved={() => setHistoryRefresh(value => value + 1)} />
+    <EquipmentHistory equipmentId={record.id} version={record.version + historyRefresh} legacyNote={record.notes} note={note} onNoteChange={setNote} disabled={attachmentBusy || saving || contactSaving || inventoryBusy || paymentBusy || !can(role, "note")} onBusyChange={setNoteSaving} />
     {dirty && <p className="unsaved-hint" role="status">Cambios sin guardar</p>}
-    <div className="drawer-actions"><button className="secondary-button" disabled={busy || conflict || !updateValues || !editable} onClick={() => void saveChanges()}>Guardar cambios</button>{record.status !== "entregado" ? <button className="primary-button" disabled={busy || conflict || !updateValues || !can(role, "receive")} onClick={() => { if (updateValues && ((!note.trim() && !contactDirty && !inventoryDirty && !paymentDirty) || confirmDiscardChanges())) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={busy} onClick={showSavedInvoice}>Ver factura</button>}</div>
+    <div className="drawer-actions"><button className="secondary-button" disabled={busy || conflict || !updateValues || !editable} onClick={() => void saveChanges()}>Guardar cambios</button>{record.status !== "entregado" ? <button className="primary-button" disabled={busy || conflict || !updateValues || !can(role, "receive")} onClick={() => { if (updateValues && ((!note.trim() && !contactDirty && !inventoryDirty && !paymentDirty && !attachmentDirty) || confirmDiscardChanges())) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={busy} onClick={showSavedInvoice}>Ver factura</button>}</div>
   </section></div>;
 }
 

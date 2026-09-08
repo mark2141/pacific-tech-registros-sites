@@ -108,8 +108,8 @@ El resumen de indicadores puede imprimirse o guardarse como PDF. Las rutas de
 reporte y descarga requieren sesión y envían `private, no-store`.
 
 Con la vista previa local abierta, `pnpm run test:tracking:local` comprueba estos
-flujos con datos ficticios y deja las órdenes creadas anuladas. El portal del cliente
-sigue pendiente; los pagos y permisos se describen abajo.
+flujos con datos ficticios y deja las órdenes creadas anuladas. La vista privada del
+cliente se describe abajo; su acceso externo sigue pendiente.
 
 ## Inventario de repuestos
 
@@ -204,3 +204,67 @@ estado de pago y saldo; el detalle contiene el historial paginado y las anulacio
 Validación: `node tests/index.js`, `node scripts/check-role-routes.mjs` y
 `node scripts/check-payments-local.mjs` (este último necesita Sites local con rol
 administrador). Las órdenes de prueba se dejan anuladas y sus abonos revertidos.
+
+## Fotos y adjuntos
+
+«Fotos y adjuntos» en una orden permite subir JPG, PNG, WebP y PDF de hasta 3 MB
+con etapa (ingreso, reparación, entrega) y descripción. Administrador, recepción
+y técnico pueden subir; lectura puede consultar. Se validan tamaño durante la
+lectura del cuerpo y firma del tipo; SVG/HTML no están admitidos. PDF se descarga,
+las imágenes tienen vista previa privada y descarga. No es un servicio de análisis
+antivirus ni de conversión de imágenes.
+
+Los archivos son inmutables, con hash SHA-256, identificador de reintento, autor
+y fecha. Un reintento no duplica el adjunto ni su evento de historial. Si se subió
+la evidencia equivocada, se conserva y se añade la corrección con su descripción.
+Los archivos no están en `public/` ni tienen una URL de almacenamiento pública;
+cada descarga valida sesión y busca la clave exclusivamente en la base.
+
+Sites usa el binding R2 `FILES`; Netlify usa el almacén de Netlify Blobs
+`pacific-tech-attachments`, que persiste entre publicaciones. El adaptador usa
+consistencia fuerte, según la [documentación oficial de Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/).
+La base contiene solo metadatos en `attachments`, con migraciones en ambas
+plataformas. Los bytes se suben antes de confirmar metadatos e historial; un
+fallo ambiguo de base puede dejar un objeto sin referencia, inaccesible desde la
+aplicación. No se borra automáticamente para evitar pérdida ante una confirmación
+de resultado incierto. La limpieza de esos objetos requiere revisión del almacén.
+
+**Migrar datos entre plataformas:** publicar el código en Netlify no copia los
+archivos ni la base de Sites. Si se quieren trasladar pruebas, exportar los
+registros y copiar cada objeto conservando `object_key` y comprobando `sha256`.
+El despliegue Netlify debe tener su contexto de Blobs y las migraciones aplicadas;
+el desarrollo local de ese adaptador se realiza bajo `netlify dev`.
+
+## Copia descargable de registros
+
+Administrador tiene «Copias de registros» en la pantalla principal. Descarga un
+JSON versionado de órdenes, historial, inventario, movimientos, pagos y metadatos
+de adjuntos. Los datos se leen en una instantánea: transacción `repeatable read`
+en PostgreSQL y lote atómico en D1. Exportaciones mayores a 2 MB de datos se
+rechazan sin entregar una copia parcial; para bases grandes usar respaldo del
+proveedor. No se incluyen credenciales, roles de entorno ni bytes de archivos.
+
+**No sustituye un respaldo completo:** guardar también los archivos de cada orden
+o una copia del almacén de objetos. `scripts/backup-db.sh` mantiene el volcado
+completo PostgreSQL para Netlify, pero tampoco incluye Netlify Blobs. La copia
+JSON es una exportación portable para revisión/restauración técnica validada sobre
+una base vacía; no hay importación automática ni restauración sobre la base activa.
+No se ha programado una ejecución automática de respaldos.
+
+## Vista privada del cliente
+
+El detalle enlaza «Vista del cliente (privada)». `/cliente?orden=ID` exige la misma
+sesión del taller y presenta solo orden, nombre, equipo, estado, fechas, importe
+y saldo. No envía al navegador notas internas, diagnóstico libre, autor de notas,
+costos de compra ni archivos. Esta vista sirve para revisar el contenido; no es
+todavía un portal accesible por clientes externos ni un enlace secreto.
+
+El acceso externo requerirá autenticación propia o enlaces aleatorios revocables
+con vencimiento y rutas expresamente autorizadas. No se cambió la audiencia del
+Site ni se habilitó un endpoint público por número de orden. Tampoco se enviaron
+mensajes a clientes.
+
+Pruebas de esta ronda: `node scripts/check-attachments-local.mjs` valida carga,
+descarga exacta, reintentos concurrentes, acceso privado, exportación y exclusión
+de notas internas en la vista del cliente. Deja una orden anulada con una imagen
+ficticia de un píxel en la base/almacén locales; no publica esos datos.

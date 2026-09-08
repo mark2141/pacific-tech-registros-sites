@@ -1,5 +1,17 @@
 # Primera revisión: cuatro cambios pequeños
 
+## Revisión actual: archivos, copia de registros y vista del cliente
+
+- Abre una orden y despliega «Fotos y adjuntos». Elige una imagen o PDF (hasta
+  3 MB), etapa y descripción. Guarda y comprueba la descarga y el historial.
+- Una cuenta de solo lectura puede consultar, pero no subir archivos.
+- «Vista del cliente (privada)» abre el estado, fechas e importes de la orden sin
+  notas internas. Todavía no es un enlace para compartir con clientes externos.
+- Como administrador, despliega «Copias de registros» en la pantalla principal.
+  Descarga el JSON. Los archivos se descargan por separado; el JSON incluye su
+  listado y metadatos, no sus bytes. No hay restauración ni programación automática.
+- El diseño conserva fondos lisos y bordes discretos.
+
 ## Revisión actual: permisos y pagos
 
 - Tu cuenta de Sites tiene rol Administrador; aparece junto al correo. «Mi acceso»

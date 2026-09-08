@@ -24,14 +24,18 @@
     "test:inventory:local": "node scripts/check-inventory-local.mjs"
   },
   "dependencies": {
+    "@netlify/blobs": "10.5.0",
     "@netlify/database": "2.0.0",
     "drizzle-orm": "1.0.0-rc.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "4.20260515.1",
     "@eslint/js": "9.39.4",
     "@next/eslint-plugin-next": "16.2.6",
+    "@openai/sites-vite-plugin": "0.2.0",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
@@ -49,9 +53,6 @@
     "typescript-eslint": "8.59.3",
     "vinext": "1.0.0-beta.8",
     "vite": "8.0.16",
-    "@openai/sites-vite-plugin": "0.2.0",
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@cloudflare/workers-types": "4.20260515.1",
     "wrangler": "4.92.0"
   },
   "type": "module"

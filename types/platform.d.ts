@@ -33,3 +33,17 @@ declare module "@platform/inventory" {
   export const listOrderParts: typeof import("../platforms/netlify/inventory").listOrderParts;
   export const moveInventory: typeof import("../platforms/netlify/inventory").moveInventory;
 }
+declare module "@platform/files" {
+  export const putFile: typeof import("../platforms/netlify/files").putFile;
+  export const getFile: typeof import("../platforms/netlify/files").getFile;
+  export const deleteFile: typeof import("../platforms/netlify/files").deleteFile;
+}
+declare module "@platform/attachments" {
+  export const getAttachment: typeof import("../platforms/netlify/attachments").getAttachment;
+  export const findAttachment: typeof import("../platforms/netlify/attachments").findAttachment;
+  export const listAttachments: typeof import("../platforms/netlify/attachments").listAttachments;
+  export const createAttachment: typeof import("../platforms/netlify/attachments").createAttachment;
+}
+declare module "@platform/backup" {
+  export const exportRecords: typeof import("../platforms/netlify/backup").exportRecords;
+}
