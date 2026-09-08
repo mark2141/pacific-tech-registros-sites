@@ -36,11 +36,19 @@ import { useUnsavedChanges, confirmDiscardChanges } from "./use-unsaved-changes"
 import { equipmentChangeConfirmation } from "../lib/equipment-confirmation";
 import { EQUIPMENT_TEXT_FIELDS } from "../lib/equipment-validation";
 import { MAX_MONEY_CENTS } from "../lib/equipment-values";
+import { EquipmentHistory } from "./equipment-history";
+import { EquipmentReports } from "./equipment-reports";
+import { CustomerContact } from "./customer-contact";
+import { ReceptionReceipt } from "./reception-receipt";
+import { workshopDays } from "../lib/equipment-tracking";
 import { useSessionRenewal } from "./use-session-renewal";
 
 type Status = "ingreso" | "diagnostico" | "reparacion" | "listo" | "entregado" | "anulado";
 
-type Equipment = {
+export type Equipment = {
+  version: number;
+  serialNumber: string;
+  estimatedExitDate: string | null;
   id: number;
   orderNumber: string;
   invoiceNumber: string | null;
@@ -102,6 +110,9 @@ function createInitialForm() {
     assignedTechnician: "",
     brand: "",
     model: "",
+    serialNumber: "",
+    estimatedExitDate: "",
+    warrantyDays: "30",
     accessories: "",
     reportedIssue: "",
     damageNotes: "",
@@ -117,6 +128,7 @@ type RegistryClientProps = {
 };
 
 type ApiError = {
+  code?: string;
   error?: string;
   detail?: string;
 };
@@ -158,18 +170,24 @@ function loadErrorMessage(error: unknown) {
 }
 
 type PageQuery = {
+  technician: string;
+  entryFrom: string;
+  entryTo: string;
   search: string;
   status: "todos" | Status;
   cursor?: string | null;
   signal?: AbortSignal;
 };
 
-async function fetchPage({ search, status, cursor, signal }: PageQuery) {
+async function fetchPage({ search, status, cursor, signal, technician, entryFrom, entryTo }: PageQuery) {
   const params = new URLSearchParams({
     limit: String(PAGE_SIZE),
     status,
   });
   if (search) params.set("search", search);
+  if (technician) params.set("technician", technician);
+  if (entryFrom) params.set("entryFrom", entryFrom);
+  if (entryTo) params.set("entryTo", entryTo);
   if (cursor) params.set("cursor", cursor);
 
   const response = await fetch(`/api/equipment?${params.toString()}`, {
@@ -177,6 +195,7 @@ async function fetchPage({ search, status, cursor, signal }: PageQuery) {
     signal,
   });
   const data = await response.json() as {
+    technicians?: string[];
     equipment?: Equipment[];
     total?: number;
     nextCursor?: string | null;
@@ -190,6 +209,7 @@ async function fetchPage({ search, status, cursor, signal }: PageQuery) {
     total: data.total ?? equipment.length,
     nextCursor: data.nextCursor ?? null,
     summary: data.summary ?? null,
+    technicians: data.technicians ?? [],
   };
 }
 
@@ -210,6 +230,14 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState<"todos" | Status>("todos");
+  const [technician, setTechnician] = useState("");
+  const [technicians, setTechnicians] = useState<string[]>([]);
+  const [entryFrom, setEntryFrom] = useState("");
+  const [entryTo, setEntryTo] = useState("");
+  const [conflictId, setConflictId] = useState<number | null>(null);
+  const [detailReload, setDetailReload] = useState(0);
+  const [receipt, setReceipt] = useState<Equipment | null>(null);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [loadedQueryKey, setLoadedQueryKey] = useState("");
   const [newOpen, setNewOpen] = useState(false);
@@ -228,7 +256,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
     setNewOpen(false);
   }
   const newModalRef = useModal(closeNewRecord);
-  const queryKey = `${filter}\u0000${debouncedSearch}\u0000${refreshVersion}`;
+  const queryKey = `${filter}\u0000${debouncedSearch}\u0000${technician}\u0000${entryFrom}\u0000${entryTo}\u0000${refreshVersion}`;
   const queryKeyRef = useRef(queryKey);
   const loadMoreRequestIdRef = useRef(0);
   const loadMoreRequestRef = useRef<{
@@ -271,10 +299,10 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
           equipment: incoming,
           total: loadedTotal,
           nextCursor: incomingCursor,
-          summary,
+          summary, technicians: incomingTechnicians,
         } = await fetchPage({
           search: debouncedSearch,
-          status: filter,
+          status: filter, technician, entryFrom, entryTo,
           signal: controller.signal,
         });
         if (cancelled) return;
@@ -282,6 +310,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
         setTotal(loadedTotal);
         setNextCursor(incomingCursor);
         setServerSummary(summary);
+        setTechnicians(incomingTechnicians);
         setLoadedQueryKey(requestedKey);
       } catch (error) {
         if (!cancelled && !controller.signal.aborted) {
@@ -297,7 +326,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
       loadMoreRequestRef.current?.controller.abort();
       loadMoreRequestRef.current = null;
     };
-  }, [debouncedSearch, filter, queryKey]);
+  }, [debouncedSearch, filter, queryKey, technician, entryFrom, entryTo]);
 
   async function loadMore() {
     if (!nextCursor || loadMoreRequestRef.current) return;
@@ -315,7 +344,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
         summary,
       } = await fetchPage({
         search: debouncedSearch,
-        status: filter,
+        status: filter, technician, entryFrom, entryTo,
         cursor: requestedCursor,
         signal: controller.signal,
       });
@@ -389,7 +418,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
     loadedQueryKey === queryKey &&
     search.trim() === debouncedSearch &&
     !loading;
-  const emptyIsNoMatch = Boolean(debouncedSearch) || filter !== "todos" ||
+  const emptyIsNoMatch = Boolean(technician || entryFrom || entryTo || debouncedSearch) || filter !== "todos" ||
     (serverSummary?.total ?? 0) > 0;
 
   function openNewRecord() {
@@ -410,6 +439,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
       if (!response.ok || !data.equipment) throw new Error(apiErrorMessage(data, "No se pudo guardar el ingreso."));
       setForm(createInitialForm());
       setNewOpen(false);
+      setReceipt(data.equipment);
       // La consulta actual decide si la orden nueva debe verse. Recargar desde
       // el servidor también actualiza los contadores globales y la facturación.
       setRefreshVersion((current) => current + 1);
@@ -428,9 +458,13 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
     setSaving(true);
     setNotice(null);
     try {
-      const response = await fetch("/api/equipment", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...values }) });
+      const response = await fetch("/api/equipment", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...values, id, version: current.version }) });
       const data = await response.json() as { equipment?: Equipment } & ApiError;
-      if (!response.ok || !data.equipment) throw new Error(apiErrorMessage(data, "No se pudo actualizar el registro."));
+      if (!response.ok || !data.equipment) {
+        if (data.code === "ORDER_CONFLICT") { setConflictId(id); if (!detail) setDetail(current); }
+        throw new Error(apiErrorMessage(data, "No se pudo actualizar el registro."));
+      }
+      setConflictId(null);
       const updated = data.equipment;
       setRecords((current) => current.map((record) => record.id === id ? updated : record));
       if (openDetailAfterUpdate) setDetail(updated);
@@ -443,6 +477,19 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
     } catch (error) {
       setNotice({ text: error instanceof Error ? error.message : "No se pudo actualizar el registro.", error: true });
     } finally { setSaving(false); }
+  }
+
+  async function reloadLatestDetail() {
+    if (!detail || saving) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/equipment/detail?id=${detail.id}`, { cache: "no-store" });
+      const data = await response.json() as { equipment?: Equipment } & ApiError;
+      if (!response.ok || !data.equipment) throw new Error(data.error || "No se pudo cargar la orden actual.");
+      setDetail(data.equipment); setDetailReload(value => value + 1); setConflictId(null);
+      setRefreshVersion(value => value + 1); setNotice(null);
+    } catch (error) { setNotice({ error: true, text: error instanceof Error ? error.message : "No se pudo cargar la orden actual." }); }
+    finally { setSaving(false); }
   }
 
   function handleStatusChange(record: Equipment, event: ChangeEvent<HTMLSelectElement>) {
@@ -474,6 +521,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
               una orden, y perder el formulario a medio llenar sería peor que
               tener dos pestañas. */}
           <a className="secondary-button" href="/precios/" target="_blank" rel="noopener noreferrer">Precios de repuestos</a>
+          <button className="secondary-button" onClick={() => setReportsOpen(true)}>Indicadores y reportes</button>
           <button className="primary-button" onClick={openNewRecord}><span>＋</span> Nuevo ingreso</button>
         </div>
       </header>
@@ -501,10 +549,16 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
           <div className="records-tools">
             <label className="search"><span aria-hidden="true">⌕</span><input aria-label="Buscar" maxLength={200} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar orden, cliente o equipo" /></label>
             <div className="records-tool-buttons">
-              {(search || filter !== "todos") && <button className="ghost-button" onClick={() => { setSearch(""); setDebouncedSearch(""); setFilter("todos"); }}>Limpiar filtros</button>}
+              {(search || filter !== "todos" || technician || entryFrom || entryTo) && <button className="ghost-button" onClick={() => { setSearch(""); setDebouncedSearch(""); setFilter("todos"); setTechnician(""); setEntryFrom(""); setEntryTo(""); }}>Limpiar filtros</button>}
               <button className="secondary-button" disabled={loading || saving} onClick={() => setRefreshVersion(value => value + 1)}>{loading ? "Actualizando…" : "Actualizar"}</button>
             </div>
           </div>
+        </div>
+        <div className="tracking-filters" role="group" aria-label="Filtrar por técnico y fecha de ingreso">
+          <label>Técnico<select value={technician} onChange={event => setTechnician(event.target.value)}><option value="">Todos los técnicos</option>{Array.from(new Set([...technicians, ...(technician ? [technician] : [])])).map(name => <option key={name} value={name}>{name}</option>)}</select></label>
+          <label>Ingreso desde<input type="date" value={entryFrom} max={entryTo || undefined} onChange={event => setEntryFrom(event.target.value)} /></label>
+          <label>Ingreso hasta<input type="date" value={entryTo} min={entryFrom || undefined} onChange={event => setEntryTo(event.target.value)} /></label>
+          <small>Las métricas superiores y los contadores por estado muestran el total general.</small>
         </div>
         <div className="tabs" role="group" aria-label="Filtrar por estado">
           <button aria-pressed={filter === "todos"} className={filter === "todos" ? "active" : ""} onClick={() => setFilter("todos")}>Todos <b>{liveTotal}</b></button>
@@ -513,7 +567,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
 
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Orden</th><th>Cliente</th><th>Equipo</th><th>Técnico</th><th>Ingreso</th><th>Estado</th><th>Total</th><th></th></tr></thead>
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Equipo</th><th>Técnico</th><th>Ingreso / plazo</th><th>Estado</th><th>Total</th><th></th></tr></thead>
             <tbody>
               {records.map((record) => (
                 <tr key={record.id}>
@@ -521,7 +575,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
                   <td><strong>{record.customerName}</strong><small>{record.customerPhone || record.customerEmail || "Sin contacto"}</small></td>
                   <td><strong>{record.equipmentType}</strong><small>{[record.brand, record.model].filter(Boolean).join(" · ") || "Sin marca/modelo"}</small></td>
                   <td><strong>{record.assignedTechnician || "Sin asignar"}</strong></td>
-                  <td>{formatDate(record.entryDate)}</td>
+                  <td>{formatDate(record.entryDate)}{record.status !== "anulado" && <small>{workshopDays(record.entryDate, currentDate, record.exitDate)} días {record.status === "entregado" ? "hasta entrega" : "en taller"}</small>}{record.estimatedExitDate && <small className={record.status !== "entregado" && record.status !== "anulado" && record.estimatedExitDate < currentDate ? "overdue" : ""}>Estimada: {formatDate(record.estimatedExitDate)}{record.status !== "entregado" && record.status !== "anulado" && record.estimatedExitDate < currentDate ? " · Vencida" : ""}</small>}</td>
                   <td><select className={`status status-control ${record.status}`} value={record.status} disabled={saving} onChange={(event) => handleStatusChange(record, event)} aria-label={`Cambiar estado de ${record.orderNumber}`}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
                   <td><strong>{formatMoney(record.status === "entregado" ? record.invoiceTotalCents : calculateTotals(record.partsCostCents, record.laborCostCents).totalCents)}</strong></td>
                   <td><button className="row-action" onClick={() => record.status === "entregado" ? setInvoice(record) : setDetail(record)} aria-label={`Abrir ${record.orderNumber}`}>›</button></td>
@@ -550,6 +604,9 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
             <label className="wide">Técnico asignado<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.assignedTechnician.max} value={form.assignedTechnician} onChange={(e) => setForm({ ...form, assignedTechnician: e.target.value })} placeholder="Nombre del técnico o Sin asignar" /></label>
             <label>Marca<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.brand.max} value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Ej. Lenovo" /></label>
             <label>Modelo<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.model.max} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="Ej. ThinkPad E14" /></label>
+            <label className="wide">Serial / IMEI (opcional)<input maxLength={EQUIPMENT_TEXT_FIELDS.serialNumber.max} value={form.serialNumber} onChange={e => setForm({ ...form, serialNumber: e.target.value })} placeholder="Número de serie o IMEI del equipo" /></label>
+            <label>Entrega estimada<input type="date" min={form.entryDate || undefined} value={form.estimatedExitDate} onChange={e => setForm({ ...form, estimatedExitDate: e.target.value })} /></label>
+            <label>Garantía del servicio (días)<input type="number" required min="0" max="3650" step="1" value={form.warrantyDays} onChange={e => setForm({ ...form, warrantyDays: e.target.value })} /></label>
             <label className="wide">Accesorios recibidos<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.accessories.max} value={form.accessories} onChange={(e) => setForm({ ...form, accessories: e.target.value })} placeholder="Cargador, bolso, cable USB…" /></label>
             <label className="wide">Falla reportada *<textarea required maxLength={EQUIPMENT_TEXT_FIELDS.reportedIssue.max} value={form.reportedIssue} onChange={(e) => setForm({ ...form, reportedIssue: e.target.value })} placeholder="Describe lo que reporta el cliente" /></label>
             <label className="wide">Daños visibles al ingreso<textarea maxLength={EQUIPMENT_TEXT_FIELDS.damageNotes.max} value={form.damageNotes} onChange={(e) => setForm({ ...form, damageNotes: e.target.value })} placeholder="Golpes, rayones, piezas faltantes…" /></label>
@@ -558,13 +615,15 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
         </form>
       </section></div>}
 
-      {detail && <DetailDrawer key={detail.id} record={detail} saving={saving} errorMessage={notice?.error ? notice.text : null} onClose={() => setDetail(null)} onUpdate={updateRecord} onInvoice={(values) => updateRecord(detail.id, { ...values, status: "entregado", exitDate: today() }, true)} onShowInvoice={() => { setDetail(null); setInvoice(detail); }} />}
+      {detail && <DetailDrawer key={`${detail.id}:${detailReload}`} company={business.legalName} conflict={conflictId === detail.id} onReload={reloadLatestDetail} onShowReceipt={() => { setDetail(null); setReceipt(detail); }} record={detail} saving={saving} errorMessage={notice?.error ? notice.text : null} onClose={() => { setDetail(null); setConflictId(null); }} onUpdate={updateRecord} onInvoice={(values) => updateRecord(detail.id, { ...values, status: "entregado", exitDate: today() }, true)} onShowInvoice={() => { setDetail(null); setInvoice(detail); }} />}
+      {reportsOpen && <EquipmentReports technicians={technicians} company={business.legalName} onClose={() => setReportsOpen(false)} />}
+      {receipt && <ReceptionReceipt record={receipt} business={business} onClose={() => setReceipt(null)} />}
       {invoice && <InvoiceModal record={invoice} business={business} onClose={() => setInvoice(null)} />}
     </main>
   );
 }
 
-function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoice, onShowInvoice }: { record: Equipment; saving: boolean; errorMessage: string | null; onClose: () => void; onUpdate: (id: number, values: Record<string, unknown>) => Promise<Equipment | undefined>; onInvoice: (values: Record<string, unknown>) => Promise<Equipment | undefined>; onShowInvoice: () => void }) {
+function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoice, onShowInvoice, conflict, onReload, onShowReceipt, company }: { company: string; conflict: boolean; onReload: () => Promise<void>; onShowReceipt: () => void; record: Equipment; saving: boolean; errorMessage: string | null; onClose: () => void; onUpdate: (id: number, values: Record<string, unknown>) => Promise<Equipment | undefined>; onInvoice: (values: Record<string, unknown>) => Promise<Equipment | undefined>; onShowInvoice: () => void }) {
   const [draft, setDraft] = useState(() => ({
     ...record,
     laborDescription:
@@ -572,13 +631,21 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
         ? ""
         : record.laborDescription,
   }));
+  const [note, setNote] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactDirty, setContactDirty] = useState(false);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const busy = saving || noteSaving || contactSaving;
+  const [warrantyInput, setWarrantyInput] = useState(String(record.warrantyDays));
+  const warrantyValid = /^\d+$/.test(warrantyInput) && Number(warrantyInput) <= 3650;
   const [partsCostInput, setPartsCostInput] = useState(centsToDollarInput(record.partsCostCents));
   const [laborCostInput, setLaborCostInput] = useState(centsToDollarInput(record.laborCostCents));
   const partsCostCents = dollarsToCents(partsCostInput);
   const laborCostCents = dollarsToCents(laborCostInput);
   const costsValid = partsCostCents !== null && laborCostCents !== null && partsCostCents + laborCostCents <= MAX_MONEY_CENTS;
   const totals = calculateTotals(partsCostCents ?? 0, laborCostCents ?? 0);
-  const updateValues = costsValid
+  const updateValues = costsValid && warrantyValid
     ? {
         status: draft.status,
         assignedTechnician: draft.assignedTechnician,
@@ -587,7 +654,9 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
         partsCostCents,
         laborDescription: draft.laborDescription,
         laborCostCents,
-        notes: draft.notes,
+        serialNumber: draft.serialNumber,
+        estimatedExitDate: draft.estimatedExitDate || null,
+        warrantyDays: Number(warrantyInput),
         customerName: draft.customerName,
         customerPhone: draft.customerPhone,
         customerEmail: draft.customerEmail,
@@ -600,18 +669,18 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
         damageNotes: draft.damageNotes,
       }
     : null;
-  const dirty = !updateValues || Object.entries(updateValues).some(([key, value]) => {
+  const dirty = contactDirty || Boolean(note.trim()) || !updateValues || Object.entries(updateValues).some(([key, value]) => {
     const original = key === "laborDescription" && record.laborDescription === DEFAULT_LABOR_DESCRIPTION
       ? "" : record[key as keyof Equipment];
     return value !== original;
   });
-  useUnsavedChanges(dirty || saving);
+  useUnsavedChanges(dirty || busy);
   function requestClose() {
-    if (saving || (dirty && !confirmDiscardChanges())) return;
+    if (busy || (dirty && !confirmDiscardChanges())) return;
     onClose();
   }
   function showSavedInvoice() {
-    if (saving || (dirty && !confirmDiscardChanges())) return;
+    if (busy || (dirty && !confirmDiscardChanges())) return;
     onShowInvoice();
   }
   async function saveChanges() {
@@ -619,6 +688,7 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
     const updated = await onUpdate(record.id, updateValues);
     if (!updated) return;
     setDraft({ ...updated, laborDescription: updated.laborDescription === DEFAULT_LABOR_DESCRIPTION ? "" : updated.laborDescription });
+    setWarrantyInput(String(updated.warrantyDays));
     setPartsCostInput(centsToDollarInput(updated.partsCostCents));
     setLaborCostInput(centsToDollarInput(updated.laborCostCents));
   }
@@ -626,12 +696,16 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
   return <div className="modal-backdrop" role="presentation" onMouseDown={closeOnBackdrop(requestClose)}><section ref={modalRef} className="drawer detail-drawer" role="dialog" aria-modal="true" aria-labelledby="detail-title">
     <div className="drawer-head"><div><p className="eyebrow">{record.orderNumber}</p><h2 id="detail-title">{record.equipmentType} {record.brand}</h2><span className={`status ${record.status}`}>{statusLabel[record.status]}</span></div><button className="close" onClick={requestClose} aria-label="Cerrar">×</button></div>
     <div className="customer-strip"><div className="avatar">{record.customerName.slice(0, 2).toUpperCase()}</div><div><strong>{record.customerName}</strong><span>{record.customerPhone || record.customerEmail || "Sin contacto"}</span></div></div>
-    <fieldset disabled={saving} className="detail-body" aria-label="Datos de la orden" style={{ border: 0, margin: 0, minWidth: 0 }}>
+    <fieldset disabled={busy} className="detail-body" aria-label="Datos de la orden" style={{ border: 0, margin: 0, minWidth: 0 }}>
       {errorMessage && <p className="field-error" role="alert">{errorMessage}</p>}
+      {conflict && <div className="conflict-message" role="alert"><strong>Esta orden tiene cambios más recientes.</strong><p>Puedes copiar tus cambios antes de cargar la versión actual. Al cargarla se reemplazará este formulario.</p><button type="button" className="secondary-button" onClick={() => { if (!dirty || confirmDiscardChanges()) void onReload(); }}>Cargar versión actual</button></div>}
+      <button type="button" className="secondary-button" onClick={() => { if (!dirty || confirmDiscardChanges()) onShowReceipt(); }}>Comprobante de ingreso</button>
       <div className="detail-facts"><span><b>Modelo</b>{record.model || "-"}</span><span><b>Ingreso</b>{formatDate(record.entryDate)}</span><span><b>Accesorios</b>{record.accessories || "Ninguno"}</span></div>
       <div className="issue"><b>Falla reportada</b><p>{record.reportedIssue}</p>{record.damageNotes && <small>Daños visibles: {record.damageNotes}</small>}</div>
       <label>Técnico asignado<input maxLength={EQUIPMENT_TEXT_FIELDS.assignedTechnician.max} value={draft.assignedTechnician} onChange={(e) => setDraft({ ...draft, assignedTechnician: e.target.value })} placeholder="Sin asignar" /></label>
       <label>Estado<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <div className="form-grid"><label>Entrega estimada<input type="date" min={draft.entryDate || undefined} value={draft.estimatedExitDate || ""} onChange={e => setDraft({ ...draft, estimatedExitDate: e.target.value || null })} /></label><label>Garantía del servicio (días)<input type="number" min="0" max="3650" step="1" value={warrantyInput} onChange={e => setWarrantyInput(e.target.value)} /></label></div>
+      {!warrantyValid && <p className="field-error" role="alert">La garantía debe ser un número entero de 0 a 3650 días.</p>}
       <label>Diagnóstico / trabajo realizado<textarea maxLength={EQUIPMENT_TEXT_FIELDS.diagnosis.max} value={draft.diagnosis} onChange={(e) => setDraft({ ...draft, diagnosis: e.target.value })} placeholder="Resultado del diagnóstico y solución aplicada" /></label>
       {/* Plegado por defecto: corregir un ingreso es la excepción, no el uso
           diario, y desplegado empujaría los costos fuera de la pantalla. */}
@@ -645,16 +719,19 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
           <label>Fecha de ingreso<input type="date" value={draft.entryDate} onChange={(e) => setDraft({ ...draft, entryDate: e.target.value })} /></label>
           <label>Marca<input maxLength={EQUIPMENT_TEXT_FIELDS.brand.max} value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} /></label>
           <label>Modelo<input maxLength={EQUIPMENT_TEXT_FIELDS.model.max} value={draft.model} onChange={(e) => setDraft({ ...draft, model: e.target.value })} /></label>
+          <label className="wide">Serial / IMEI (opcional)<input maxLength={EQUIPMENT_TEXT_FIELDS.serialNumber.max} value={draft.serialNumber} onChange={e => setDraft({ ...draft, serialNumber: e.target.value })} /></label>
           <label className="wide">Accesorios recibidos<input maxLength={EQUIPMENT_TEXT_FIELDS.accessories.max} value={draft.accessories} onChange={(e) => setDraft({ ...draft, accessories: e.target.value })} /></label>
           <label className="wide">Falla reportada *<textarea maxLength={EQUIPMENT_TEXT_FIELDS.reportedIssue.max} value={draft.reportedIssue} onChange={(e) => setDraft({ ...draft, reportedIssue: e.target.value })} /></label>
           <label className="wide">Daños visibles al ingreso<textarea maxLength={EQUIPMENT_TEXT_FIELDS.damageNotes.max} value={draft.damageNotes} onChange={(e) => setDraft({ ...draft, damageNotes: e.target.value })} /></label>
         </div>
       </details>
-      <label>Nota<textarea maxLength={EQUIPMENT_TEXT_FIELDS.notes.max} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Llamada al cliente, repuesto pedido, acuerdo de pago…" /></label>
+
       <div className="cost-box"><h3>Costos del servicio</h3><label>Descripción de piezas<input maxLength={EQUIPMENT_TEXT_FIELDS.partsDescription.max} value={draft.partsDescription} onChange={(e) => setDraft({ ...draft, partsDescription: e.target.value })} placeholder="Pieza o repuesto utilizado" /></label><label className="money-field">Precio de piezas<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={partsCostCents === null} value={partsCostInput} onChange={(e) => setPartsCostInput(e.target.value)} /></label><label>Descripción de mano de obra<input maxLength={EQUIPMENT_TEXT_FIELDS.laborDescription.max} value={draft.laborDescription} onChange={(e) => setDraft({ ...draft, laborDescription: e.target.value })} placeholder="Ej. Diagnóstico, instalación o limpieza" /></label><label className="money-field">Mano de obra<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={laborCostCents === null} value={laborCostInput} onChange={(e) => setLaborCostInput(e.target.value)} /></label>{!costsValid && <p className="field-error" role="alert">Ingresa montos válidos, mayores o iguales a cero y con máximo dos decimales y un total de hasta $21,474,836.47.</p>}{costsValid && <div className="cost-summary"><div className="total-row"><span>Total estimado</span><strong>{formatMoney(totals.totalCents)}</strong></div></div>}</div>
     </fieldset>
+    <CustomerContact record={record} company={company} disabled={saving || noteSaving} onBusyChange={setContactSaving} onDirtyChange={setContactDirty} onSaved={() => setHistoryRefresh(value => value + 1)} />
+    <EquipmentHistory equipmentId={record.id} version={record.version + historyRefresh} legacyNote={record.notes} note={note} onNoteChange={setNote} disabled={saving || contactSaving} onBusyChange={setNoteSaving} />
     {dirty && <p className="unsaved-hint" role="status">Cambios sin guardar</p>}
-    <div className="drawer-actions"><button className="secondary-button" disabled={saving || !updateValues} onClick={() => void saveChanges()}>Guardar cambios</button>{record.status !== "entregado" ? <button className="primary-button" disabled={saving || !updateValues} onClick={() => { if (updateValues) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={saving} onClick={showSavedInvoice}>Ver factura</button>}</div>
+    <div className="drawer-actions"><button className="secondary-button" disabled={busy || conflict || !updateValues} onClick={() => void saveChanges()}>Guardar cambios</button>{record.status !== "entregado" ? <button className="primary-button" disabled={busy || conflict || !updateValues} onClick={() => { if (updateValues && ((!note.trim() && !contactDirty) || confirmDiscardChanges())) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={busy} onClick={showSavedInvoice}>Ver factura</button>}</div>
   </section></div>;
 }
 

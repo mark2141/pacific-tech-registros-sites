@@ -18,3 +18,6 @@ import "./totals.test.mjs";
 import "./values.test.mjs";
 import "./equipment-validation.test.mjs";
 import "./equipment-confirmation.test.mjs";
+
+import "./equipment-tracking.test.mjs";
+import "./equipment-reports.test.mjs";

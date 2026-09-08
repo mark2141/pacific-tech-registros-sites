@@ -1,8 +1,13 @@
+import { EquipmentConflictError, expectedVersion } from "../../lib/equipment-tracking";
+import type { ReportQuery, ReportRow } from "../../lib/equipment-reports";
 import {
   and,
   count,
   desc,
   eq,
+  gte,
+  lte,
+  asc,
   ilike,
   like,
   lt,
@@ -11,15 +16,15 @@ import {
   sql,
 } from "drizzle-orm";
 import { getDb } from "../../db";
-import { equipment } from "../../db/schema";
+import { equipment, equipmentHistory } from "../../db/schema";
 import { isUniqueConstraintError } from "../../lib/database-error";
 import { buildEquipmentUpdate } from "../../lib/equipment-update";
 import { monthlyOrderNumber } from "./order-number";
 import { todayInPanama } from "../../lib/panama-date";
 import { escapeLikePattern, serializeEquipmentCursor } from "../../lib/equipment-query";
-import type { EquipmentListQuery, NewEquipmentInput } from "../../lib/equipment-repository";
+import type { EquipmentActor, EquipmentListQuery, NewEquipmentInput } from "../../lib/equipment-repository";
 
-export async function listEquipment({ search, status, limit, offset, cursor }: EquipmentListQuery) {
+export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo }: EquipmentListQuery) {
     const db = getDb();
 
     // La búsqueda se ejecuta sobre toda la tabla, no solo sobre los cien
@@ -45,7 +50,10 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
       status === "todos"
         ? ne(equipment.status, "anulado")
         : eq(equipment.status, status);
-    const listCondition = and(statusCondition, searchCondition);
+    const listCondition = and(statusCondition, searchCondition,
+      technician ? eq(equipment.assignedTechnician, technician) : undefined,
+      entryFrom ? gte(equipment.entryDate, entryFrom) : undefined,
+      entryTo ? lte(equipment.entryDate, entryTo) : undefined);
 
     // `id` no cambia al editar una orden. Paginar por él evita que una edición
     // concurrente mueva una fila desde debajo del cursor hasta encima y la deje
@@ -59,7 +67,7 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
     // cliente solo veía la página cargada, así que a partir de PAGE_SIZE
     // órdenes los contadores y lo facturado del mes quedaban por debajo.
     const monthPrefix = `${todayInPanama().slice(0, 7)}%`;
-    const [pageRows, [matching], statusRows, [revenue]] = await Promise.all([
+    const [pageRows, [matching], statusRows, [revenue], technicians] = await Promise.all([
       db
         .select()
         .from(equipment)
@@ -81,6 +89,7 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
         })
         .from(equipment)
         .where(like(equipment.exitDate, monthPrefix)),
+      db.selectDistinct({ name: equipment.assignedTechnician }).from(equipment).orderBy(asc(equipment.assignedTechnician)),
     ]);
 
     const hasMore = pageRows.length > limit;
@@ -100,6 +109,7 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
 
     return {
       equipment: selectedRows,
+      technicians: technicians.map(row => row.name),
       total: Number(matching?.total ?? 0),
       limit,
       offset,
@@ -112,56 +122,85 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
     };
 }
 
-export async function createEquipment(values: NewEquipmentInput, prefix: string) {
-    const db = getDb();
-    const insertValues = { ...values, orderNumber: monthlyOrderNumber(prefix) };
-    let row: typeof equipment.$inferSelect | undefined;
-    let lastUniqueError: unknown;
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      try {
-        [row] = await db.insert(equipment).values(insertValues).returning();
-        break;
-      } catch (error) {
-        if (!isUniqueConstraintError(error)) throw error;
-        lastUniqueError = error;
-      }
+export async function createEquipment(values: NewEquipmentInput, prefix: string, actor: EquipmentActor) {
+  const db = getDb();
+  let lastUniqueError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await db.transaction(async tx => {
+        const [row] = await tx.insert(equipment).values({ ...values, orderNumber: monthlyOrderNumber(prefix) }).returning();
+        if (!row) throw new Error("No se pudo guardar el ingreso.");
+        await tx.insert(equipmentHistory).values({ equipmentId: row.id, kind: "ingreso", toStatus: row.status,
+          actorUserId: actor.userId, actorEmail: actor.email });
+        return row;
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      lastUniqueError = error;
     }
-
-    if (!row) throw lastUniqueError || new Error("No se pudo generar el número de orden.");
-
-    return row;
+  }
+  throw lastUniqueError || new Error("No se pudo generar el número de orden.");
 }
 
-export async function updateEquipment(id: number, payload: Record<string, unknown>) {
-    const db = getDb();
-    // La lectura, el cálculo de la instantánea y la escritura comparten el
-    // mismo bloqueo de fila. Dos pestañas que corrijan costos parciales ya no
-    // pueden calcular la factura contra el mismo estado antiguo y luego pisarse.
-    const row = await db.transaction(async (tx) => {
-      const [current] = await tx
-        .select({
-          id: equipment.id,
-          status: equipment.status,
-          exitDate: equipment.exitDate,
-          invoiceNumber: equipment.invoiceNumber,
-          partsCostCents: equipment.partsCostCents,
-          laborCostCents: equipment.laborCostCents,
-          invoiceTaxCents: equipment.invoiceTaxCents,
-          invoiceTaxRate: equipment.invoiceTaxRate,
-        })
-        .from(equipment)
-        .where(eq(equipment.id, id))
-        .limit(1)
-        .for("update");
-      if (!current) return null;
+export async function getEquipment(id: number) {
+  const [row] = await getDb().select().from(equipment).where(eq(equipment.id, id)).limit(1);
+  return row ?? null;
+}
 
-      const values = buildEquipmentUpdate(current, payload);
-      const [updated] = await tx
-        .update(equipment)
-        .set(values)
-        .where(eq(equipment.id, id))
-        .returning();
-      return updated ?? null;
-    });
-    return row;
+export async function updateEquipment(id: number, payload: Record<string, unknown>, actor: EquipmentActor) {
+  const version = expectedVersion(payload.version);
+  return getDb().transaction(async tx => {
+    const [current] = await tx.select().from(equipment).where(eq(equipment.id, id)).limit(1).for("update");
+    if (!current) return null;
+    if (current.version !== version) throw new EquipmentConflictError();
+    const values = buildEquipmentUpdate(current, payload);
+    const [updated] = await tx.update(equipment).set({ ...values, version: version + 1 })
+      .where(and(eq(equipment.id, id), eq(equipment.version, version))).returning();
+    if (!updated) throw new EquipmentConflictError();
+    if (updated.status !== current.status) {
+      await tx.insert(equipmentHistory).values({ equipmentId: id, kind: "estado",
+        fromStatus: current.status, toStatus: updated.status, actorUserId: actor.userId, actorEmail: actor.email });
+    }
+    return updated;
+  });
+}
+
+export async function listEquipmentHistory(id: number, before?: number) {
+  const rows = await getDb().select().from(equipmentHistory)
+    .where(and(eq(equipmentHistory.equipmentId, id), before ? lt(equipmentHistory.id, before) : undefined))
+    .orderBy(desc(equipmentHistory.id)).limit(51);
+  const history = rows.slice(0, 50);
+  return { history, nextCursor: rows.length > 50 ? String(history.at(-1)!.id) : null };
+}
+
+export async function addEquipmentNote(id: number, message: string, actor: EquipmentActor, kind: "nota" | "contacto" = "nota") {
+  return getDb().transaction(async tx => {
+    const [row] = await tx.select({ id: equipment.id }).from(equipment).where(eq(equipment.id, id)).limit(1);
+    if (!row) return null;
+    const [event] = await tx.insert(equipmentHistory).values({ equipmentId: id, kind, message,
+      actorUserId: actor.userId, actorEmail: actor.email }).returning();
+    return event;
+  });
+}
+
+export async function getLastEquipmentContact(id: number) {
+  const [event] = await getDb().select().from(equipmentHistory)
+    .where(and(eq(equipmentHistory.equipmentId, id), eq(equipmentHistory.kind, "contacto")))
+    .orderBy(desc(equipmentHistory.id)).limit(1);
+  return event ?? null;
+}
+
+export async function listReportRows(query: ReportQuery, before?: number): Promise<ReportRow[]> {
+  return getDb().select({ id: equipment.id, orderNumber: equipment.orderNumber, customerName: equipment.customerName,
+    equipmentType: equipment.equipmentType, assignedTechnician: equipment.assignedTechnician,
+    status: equipment.status, entryDate: equipment.entryDate, exitDate: equipment.exitDate,
+    estimatedExitDate: equipment.estimatedExitDate, invoiceNumber: equipment.invoiceNumber,
+    invoiceTotalCents: equipment.invoiceTotalCents, partsCostCents: equipment.partsCostCents, laborCostCents: equipment.laborCostCents })
+    .from(equipment).where(and(
+      before ? lt(equipment.id, before) : undefined,
+      query.technician ? eq(equipment.assignedTechnician, query.technician) : undefined,
+      or(and(ne(equipment.status, "entregado"), ne(equipment.status, "anulado")),
+        and(gte(equipment.entryDate, query.from), lte(equipment.entryDate, query.to)),
+        and(gte(equipment.exitDate, query.from), lte(equipment.exitDate, query.to))),
+    )).orderBy(desc(equipment.id)).limit(500);
 }

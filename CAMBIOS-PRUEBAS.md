@@ -12,8 +12,36 @@ ni incorporan pagos, inventario o un nuevo modelo de facturación.
 
 La confirmación al modificar una factura explica el comportamiento existente:
 se siguen recalculando sus importes o quitando la factura al cambiar el estado.
-No se ha añadido todavía una bitácora ni documentos inmutables.
+En esta primera revisión todavía no había bitácora. La siguiente incorpora el
+historial descrito abajo; los documentos siguen mostrando los datos guardados
+actualmente en la orden.
 
 Validación técnica: pruebas de negocio, tipos, lint, ciclo HTTP local con D1 y
 compilaciones de ambos destinos. Las pruebas escriben solamente registros ficticios
 locales; no se alteran las órdenes guardadas en el Site ni la base de Netlify.
+
+## Segunda revisión: seguimiento de órdenes
+
+1. Filtrar por técnico y rango de ingreso; revisar días en taller y fecha estimada.
+2. Añadir notas desde «Historial de la orden» y cambiar un estado: ambos eventos
+   deben mostrar autor y fecha. Las notas antiguas aparecen como nota anterior.
+3. Registrar serial / IMEI y garantía; abrir «Comprobante de ingreso» e imprimir
+   o guardar como PDF. También se abre al guardar un ingreso nuevo.
+4. Abrir la misma orden en dos sesiones: guardar una y luego intentar guardar la
+   otra. La segunda conserva su borrador y pide cargar la versión actual.
+
+## Tercera revisión: comunicación e indicadores
+
+1. En una orden, desplegar «Contactar al cliente». Elegir plantilla y canal,
+   revisar destinatario y texto, y abrir WhatsApp o correo. Después de enviar,
+   pulsar «Registrar contacto realizado». Verificar el último contacto y el
+   evento en el historial. Las pruebas automatizadas nunca envían mensajes.
+2. Abrir «Indicadores y reportes», elegir período y técnico y pulsar Consultar.
+   Revisar carga actual, resultados del período y tabla por técnico. Los equipos
+   anulados no cuentan como nuevos ingresos del período.
+3. Descargar órdenes en CSV y usar Imprimir / PDF para el resumen. El CSV filtra
+   por fecha de ingreso e incluye anulados identificados por estado; la
+   facturación del panel filtra por fecha de salida. No son el mismo conjunto.
+
+Este bloque agrega migraciones compatibles para Sites y Netlify. Los cambios
+de código no sincronizan ni importan los datos de prueba a Netlify.

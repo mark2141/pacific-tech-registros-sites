@@ -1,3 +1,4 @@
+import { EquipmentConflictError, parseWarrantyDays, parseEstimatedExitDate } from "../../../lib/equipment-tracking";
 import { readEquipmentPayload, InvalidEquipmentPayloadError } from "../../../lib/equipment-validation";
 import { listEquipment, createEquipment, updateEquipment } from "@platform/equipment";
 import { isUniqueConstraintError } from "../../../lib/database-error";
@@ -71,10 +72,10 @@ export async function GET(request: Request) {
   try {
     const user = await getAuthUser();
     if (!user) return unauthorized();
-    const { search, status, limit, offset, cursor } = parseEquipmentListQuery(
+    const query = parseEquipmentListQuery(
       new URL(request.url).searchParams,
     );
-    return json(await listEquipment({ search, status, limit, offset, cursor }));
+    return json(await listEquipment(query));
   } catch (error) {
     if (error instanceof InvalidEquipmentQueryError) {
       return json({ error: error.message }, 400);
@@ -110,6 +111,9 @@ export async function POST(request: Request) {
       brand: clean(payload.brand),
       model: clean(payload.model),
       accessories: clean(payload.accessories),
+      serialNumber: clean(payload.serialNumber),
+      estimatedExitDate: parseEstimatedExitDate(payload.estimatedExitDate, entryDate),
+      warrantyDays: payload.warrantyDays === undefined ? 30 : parseWarrantyDays(payload.warrantyDays),
       reportedIssue,
       damageNotes: clean(payload.damageNotes),
       laborDescription: "",
@@ -117,7 +121,7 @@ export async function POST(request: Request) {
       notes: clean(payload.notes),
     };
 
-    const row = await createEquipment(insertValues, orderPrefix);
+    const row = await createEquipment(insertValues, orderPrefix, user);
 
     return json({ equipment: row }, 201);
   } catch (error) {
@@ -137,12 +141,14 @@ export async function PATCH(request: Request) {
       return json({ error: "Registro inválido." }, 400);
     }
 
-    const row = await updateEquipment(id, payload);
+    if ("notes" in payload) throw new InvalidEquipmentPayloadError("Las notas se añaden desde el historial; las anteriores se conservan.");
+    const row = await updateEquipment(id, payload, user);
     if (!row) {
       return json({ error: "No se encontró el equipo." }, 404);
     }
     return json({ equipment: row });
   } catch (error) {
+    if (error instanceof EquipmentConflictError) return json({ error: error.message, code: "ORDER_CONFLICT" }, 409);
     if (error instanceof InvalidEquipmentStatusError) {
       return json({ error: "Estado inválido." }, 400);
     }

@@ -6,6 +6,7 @@ export const EQUIPMENT_TEXT_FIELDS = {
   assignedTechnician: { label: "El técnico asignado", max: 100 },
   brand: { label: "La marca", max: 80 },
   model: { label: "El modelo", max: 120 },
+  serialNumber: { label: "El serial / IMEI", max: 120 },
   accessories: { label: "Los accesorios", max: 300 },
   reportedIssue: { label: "La falla reportada", max: 2000 },
   damageNotes: { label: "Los daños visibles", max: 2000 },

@@ -7,6 +7,11 @@ declare module "@platform/auth" {
   export const previewLabel: string | null;
 }
 declare module "@platform/equipment" {
+  export const getLastEquipmentContact: typeof import("../platforms/netlify/equipment").getLastEquipmentContact;
+  export const listReportRows: typeof import("../platforms/netlify/equipment").listReportRows;
+  export const getEquipment: typeof import("../platforms/netlify/equipment").getEquipment;
+  export const listEquipmentHistory: typeof import("../platforms/netlify/equipment").listEquipmentHistory;
+  export const addEquipmentNote: typeof import("../platforms/netlify/equipment").addEquipmentNote;
   export const listEquipment: typeof import("../platforms/netlify/equipment").listEquipment;
   export const createEquipment: typeof import("../platforms/netlify/equipment").createEquipment;
   export const updateEquipment: typeof import("../platforms/netlify/equipment").updateEquipment;

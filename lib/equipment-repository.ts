@@ -6,5 +6,8 @@ export type EquipmentListQuery = ReturnType<typeof parseEquipmentListQuery>;
 export type NewEquipmentInput = Pick<EquipmentRow,
   "customerName" | "customerPhone" | "customerEmail" | "equipmentType" |
   "assignedTechnician" | "brand" | "model" | "accessories" | "reportedIssue" |
-  "damageNotes" | "laborDescription" | "entryDate" | "notes"
+  "damageNotes" | "laborDescription" | "entryDate" | "notes" |
+  "serialNumber" | "estimatedExitDate" | "warrantyDays"
 >;
+
+export type EquipmentActor = { userId: string; email: string };

@@ -19,7 +19,8 @@
     "build:sites": "DEPLOY_TARGET=sites vinext build",
     "db:generate:sites": "drizzle-kit generate --config drizzle.sites.config.ts && node scripts/prepare-sites-migrations.mjs",
     "db:migrate:sites:local": "node scripts/prepare-sites-migrations.mjs && wrangler d1 migrations apply DB --local --config wrangler.sites.json",
-    "test:sites:local": "node scripts/check-sites-local.mjs"
+    "test:sites:local": "node scripts/check-sites-local.mjs",
+    "test:tracking:local": "node scripts/check-equipment-tracking-local.mjs"
   },
   "dependencies": {
     "@netlify/database": "2.0.0",

@@ -26,6 +26,8 @@ export const equipment = sqliteTable(
     status: text("status").notNull().default("ingreso"),
     entryDate: text("entry_date").notNull(),
     exitDate: text("exit_date"),
+    estimatedExitDate: text("estimated_exit_date"),
+    version: integer("version").notNull().default(1),
     invoiceSubtotalCents: integer("invoice_subtotal_cents"),
     invoiceTaxCents: integer("invoice_tax_cents"),
     invoiceTotalCents: integer("invoice_total_cents"),
@@ -40,6 +42,20 @@ export const equipment = sqliteTable(
     index("idx_equipment_status").on(table.status),
     index("idx_equipment_exit_date").on(table.exitDate),
     index("idx_equipment_status_entry_date").on(table.status, table.entryDate),
+    index("idx_equipment_technician_entry").on(table.assignedTechnician, table.entryDate),
     index("idx_equipment_customer_name").on(table.customerName),
   ],
 );
+
+// Append-only events. Original notes remain on equipment for legacy records.
+export const equipmentHistory = sqliteTable("equipment_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  equipmentId: integer("equipment_id").notNull().references(() => equipment.id),
+  kind: text("kind").notNull(),
+  message: text("message").notNull().default(""),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  actorUserId: text("actor_user_id").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [index("idx_history_equipment_id").on(table.equipmentId, table.id)]);

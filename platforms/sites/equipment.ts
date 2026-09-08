@@ -1,4 +1,7 @@
-import type { EquipmentListQuery, EquipmentRow, NewEquipmentInput } from "../../lib/equipment-repository";
+import { EquipmentConflictError, expectedVersion } from "../../lib/equipment-tracking";
+import type { equipmentHistory } from "../../db/schema";
+import type { ReportQuery, ReportRow } from "../../lib/equipment-reports";
+import type { EquipmentActor, EquipmentListQuery, EquipmentRow, NewEquipmentInput } from "../../lib/equipment-repository";
 import { buildEquipmentUpdate } from "../../lib/equipment-update";
 import { escapeLikePattern, serializeEquipmentCursor } from "../../lib/equipment-query";
 import { todayInPanama } from "../../lib/panama-date";
@@ -16,6 +19,7 @@ const columns = {
   entryDate: "entry_date", exitDate: "exit_date", invoiceSubtotalCents: "invoice_subtotal_cents",
   invoiceTaxCents: "invoice_tax_cents", invoiceTotalCents: "invoice_total_cents",
   invoiceTaxRate: "invoice_tax_rate", warrantyDays: "warranty_days", notes: "notes",
+  version: "version", estimatedExitDate: "estimated_exit_date",
   createdAt: "created_at", updatedAt: "updated_at",
 } as const;
 
@@ -25,7 +29,7 @@ function rowFrom(raw: RawRow): EquipmentRow {
   return { ...raw, createdAt: new Date(raw.createdAt), updatedAt: new Date(raw.updatedAt) };
 }
 
-export async function listEquipment({ search, status, limit, offset, cursor }: EquipmentListQuery) {
+export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo }: EquipmentListQuery) {
   const db = getSitesDb();
   const conditions = [status === "todos" ? "status != ?" : "status = ?"];
   const values: (string | number)[] = [status === "todos" ? "anulado" : status];
@@ -34,6 +38,9 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
     conditions.push(`(${fields.map(field => `${field} LIKE ? ESCAPE '\\'`).join(" OR ")})`);
     values.push(...fields.map(() => `%${escapeLikePattern(search)}%`));
   }
+  if (technician) { conditions.push("assigned_technician = ?"); values.push(technician); }
+  if (entryFrom) { conditions.push("entry_date >= ?"); values.push(entryFrom); }
+  if (entryTo) { conditions.push("entry_date <= ?"); values.push(entryTo); }
   const where = conditions.join(" AND ");
   const pageWhere = cursor ? `${where} AND id < ?` : where;
   const pageValues = cursor ? [...values, cursor.id] : [...values];
@@ -43,6 +50,7 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
     db.prepare(`SELECT COUNT(*) AS total FROM equipment WHERE ${where}`).bind(...values),
     db.prepare("SELECT status, COUNT(*) AS count FROM equipment GROUP BY status"),
     db.prepare("SELECT COALESCE(SUM(invoice_total_cents), 0) AS revenue FROM equipment WHERE exit_date LIKE ?").bind(monthPrefix),
+    db.prepare("SELECT DISTINCT assigned_technician AS name FROM equipment ORDER BY assigned_technician"),
   ]);
   const page = results[0].results as RawRow[];
   const hasMore = page.length > limit;
@@ -51,6 +59,7 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
   const statusRows = results[2].results as { status: string; count: number }[];
   return {
     equipment: selected.map(rowFrom),
+    technicians: (results[4].results as { name: string }[]).map(row => row.name),
     total: Number((results[1].results[0] as { total: number } | undefined)?.total ?? 0), limit, offset,
     nextCursor: hasMore && last ? serializeEquipmentCursor({ id: last.id }) : null,
     summary: {
@@ -61,42 +70,96 @@ export async function listEquipment({ search, status, limit, offset, cursor }: E
   };
 }
 
-export async function createEquipment(values: NewEquipmentInput, prefix: string) {
-  const entries = Object.entries(values) as [keyof NewEquipmentInput, string][];
+const historySelection = `id, equipment_id AS "equipmentId", kind, message, from_status AS "fromStatus",
+  to_status AS "toStatus", actor_user_id AS "actorUserId", actor_email AS "actorEmail", created_at AS "createdAt"`;
+type RawHistory = Omit<typeof equipmentHistory.$inferSelect, "createdAt"> & { createdAt: string };
+function historyFrom(raw: RawHistory) { return { ...raw, createdAt: new Date(raw.createdAt) }; }
+
+export async function createEquipment(values: NewEquipmentInput, prefix: string, actor: EquipmentActor) {
+  const entries = Object.entries(values) as [keyof NewEquipmentInput, string | number | null][];
   const names = entries.map(([key]) => columns[key]);
-  // SQLite serializes this INSERT; numbering and insertion form one operation.
-  // printf's width is a minimum, so order 1000 is not truncated.
-  const raw = await getSitesDb().prepare(`
-    INSERT INTO equipment (order_number, ${names.join(", ")})
-    VALUES (? || printf('%03d', COALESCE((
-      SELECT MAX(CAST(substr(order_number, ?) AS INTEGER)) FROM equipment WHERE order_number LIKE ?
-    ), 0) + 1), ${entries.map(() => "?").join(", ")})
-    RETURNING ${selection}
-  `).bind(prefix, prefix.length + 1, `${prefix}%`, ...entries.map(([, value]) => value)).first<RawRow>();
+  const db = getSitesDb();
+  // One atomic batch couples reception and its author. last_insert_rowid belongs
+  // to the preceding equipment INSERT in this same isolated transaction.
+  const results = await db.batch([
+    db.prepare(`INSERT INTO equipment (order_number, ${names.join(", ")})
+      VALUES (? || printf('%03d', COALESCE((SELECT MAX(CAST(substr(order_number, ?) AS INTEGER))
+        FROM equipment WHERE order_number LIKE ?), 0) + 1), ${entries.map(() => "?").join(", ")})
+      RETURNING ${selection}`)
+      .bind(prefix, prefix.length + 1, `${prefix}%`, ...entries.map(([, value]) => value)),
+    db.prepare(`INSERT INTO equipment_history (equipment_id, kind, to_status, actor_user_id, actor_email, created_at)
+      VALUES (last_insert_rowid(), 'ingreso', 'ingreso', ?, ?, ?)`)
+      .bind(actor.userId, actor.email, new Date().toISOString()),
+  ]);
+  const raw = results[0].results[0] as RawRow | undefined;
   if (!raw) throw new Error("No se pudo guardar el ingreso.");
   return rowFrom(raw);
 }
 
-export async function updateEquipment(id: number, payload: Record<string, unknown>) {
+export async function getEquipment(id: number) {
+  const raw = await getSitesDb().prepare(`SELECT ${selection} FROM equipment WHERE id = ?`).bind(id).first<RawRow>();
+  return raw ? rowFrom(raw) : null;
+}
+
+export async function updateEquipment(id: number, payload: Record<string, unknown>, actor: EquipmentActor) {
+  const version = expectedVersion(payload.version);
   const db = getSitesDb();
-  // D1 has no interactive transactions. Compare the entire previous row in the
-  // conditional UPDATE so a concurrent write cannot invalidate invoice totals.
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const current = await db.prepare(`SELECT ${selection} FROM equipment WHERE id = ?`).bind(id).first<RawRow>();
-    if (!current) return null;
-    const values = buildEquipmentUpdate(rowFrom(current), payload);
-    const entries = Object.entries(values).map(([key, value]) => {
-      const column = columns[key as keyof typeof columns];
-      if (!column) throw new Error("Campo de actualización desconocido.");
-      return { column, value: value instanceof Date ? value.toISOString() : value };
-    });
-    const previous = Object.entries(columns).filter(([key]) => key !== "id");
-    const raw = await db.prepare(`UPDATE equipment SET ${entries.map(({ column }) => `${column} = ?`).join(", ")}
-      WHERE id = ? AND ${previous.map(([, column]) => `${column} IS ?`).join(" AND ")}
-      RETURNING ${selection}`)
-      .bind(...entries.map(({ value }) => value), id, ...previous.map(([key]) => current[key as keyof RawRow]))
-      .first<RawRow>();
-    if (raw) return rowFrom(raw);
+  const current = await getEquipment(id);
+  if (!current) return null;
+  if (current.version !== version) throw new EquipmentConflictError();
+  const values: Record<string, string | number | Date | null> = { ...buildEquipmentUpdate(current, payload), version: version + 1 };
+  const entries = Object.entries(values).map(([key, value]) => {
+    const column = columns[key as keyof typeof columns];
+    if (!column) throw new Error("Campo de actualización desconocido.");
+    return { column, value: value instanceof Date ? value.toISOString() : value };
+  });
+  const statements = [db.prepare(`UPDATE equipment SET ${entries.map(({ column }) => `${column} = ?`).join(", ")}
+    WHERE id = ? AND version = ? RETURNING ${selection}`)
+    .bind(...entries.map(({ value }) => value), id, version)];
+  const newStatus = typeof values.status === "string" ? values.status : current.status;
+  if (newStatus !== current.status) {
+    // changes() reads only the preceding conditional UPDATE in this atomic batch.
+    // A losing writer inserts no history and cannot overwrite the winning edit.
+    statements.push(db.prepare(`INSERT INTO equipment_history
+      (equipment_id, kind, from_status, to_status, actor_user_id, actor_email, created_at)
+      SELECT ?, 'estado', ?, ?, ?, ?, ? WHERE changes() = 1`)
+      .bind(id, current.status, newStatus, actor.userId, actor.email, new Date().toISOString()));
   }
-  throw new Error("La orden está siendo modificada. Vuelve a intentarlo.");
+  const results = await db.batch(statements);
+  const raw = results[0].results[0] as RawRow | undefined;
+  if (!raw) throw new EquipmentConflictError();
+  return rowFrom(raw);
+}
+
+export async function listEquipmentHistory(id: number, before?: number) {
+  const result = await getSitesDb().prepare(`SELECT ${historySelection} FROM equipment_history
+    WHERE equipment_id = ? ${before ? "AND id < ?" : ""} ORDER BY id DESC LIMIT 51`)
+    .bind(...(before ? [id, before] : [id])).all<RawHistory>();
+  const history = result.results.slice(0, 50).map(historyFrom);
+  return { history, nextCursor: result.results.length > 50 ? String(history.at(-1)!.id) : null };
+}
+
+export async function addEquipmentNote(id: number, message: string, actor: EquipmentActor, kind: "nota" | "contacto" = "nota") {
+  const raw = await getSitesDb().prepare(`INSERT INTO equipment_history
+    (equipment_id, kind, message, actor_user_id, actor_email, created_at)
+    SELECT id, ?, ?, ?, ?, ? FROM equipment WHERE id = ? RETURNING ${historySelection}`)
+    .bind(kind, message, actor.userId, actor.email, new Date().toISOString(), id).first<RawHistory>();
+  return raw ? historyFrom(raw) : null;
+}
+
+export async function getLastEquipmentContact(id: number) {
+  const raw = await getSitesDb().prepare(`SELECT ${historySelection} FROM equipment_history
+    WHERE equipment_id = ? AND kind = 'contacto' ORDER BY id DESC LIMIT 1`).bind(id).first<RawHistory>();
+  return raw ? historyFrom(raw) : null;
+}
+
+export async function listReportRows(query: ReportQuery, before?: number): Promise<ReportRow[]> {
+  const fields: (keyof ReportRow)[] = ["id", "orderNumber", "customerName", "equipmentType", "assignedTechnician", "status", "entryDate", "exitDate", "estimatedExitDate", "invoiceNumber", "invoiceTotalCents", "partsCostCents", "laborCostCents"];
+  const selected = fields.map(key => `${columns[key]} AS "${key}"`).join(", ");
+  const conditions = ["((status != 'entregado' AND status != 'anulado') OR entry_date BETWEEN ? AND ? OR exit_date BETWEEN ? AND ?)"];
+  const values: (number | string)[] = [query.from, query.to, query.from, query.to];
+  if (query.technician) { conditions.push("assigned_technician = ?"); values.push(query.technician); }
+  if (before) { conditions.push("id < ?"); values.push(before); }
+  const rows = await getSitesDb().prepare(`SELECT ${selected} FROM equipment WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`).bind(...values).all<ReportRow>();
+  return rows.results;
 }

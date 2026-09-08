@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-const origin = process.argv[2] || "http://localhost:5173";
+const origin = new URL(process.argv[2] || "http://localhost:5173").origin;
 if (!["localhost", "127.0.0.1"].includes(new URL(origin).hostname)) throw new Error("Esta prueba solo puede escribir en un entorno local.");
 const signIn = await fetch(`${origin}/signin-with-chatgpt?return_to=/`, { redirect: "manual" });
 const cookie = signIn.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
@@ -28,17 +28,17 @@ const search = await request(`/api/equipment?search=${encodeURIComponent(marker)
 assert.equal(search.body.total, 1);
 assert.equal(search.body.equipment[0].id, id);
 assert.match(search.headers.get("cache-control"), /no-store/);
-const edited = await request("/api/equipment", "PATCH", { id, diagnosis: "Equipo de prueba revisado", status: "listo", partsCostCents: 1999, laborCostCents: 5000 });
+const edited = await request("/api/equipment", "PATCH", { id, version: created.body.equipment.version, diagnosis: "Equipo de prueba revisado", status: "listo", partsCostCents: 1999, laborCostCents: 5000 });
 assert.equal(edited.status, 200, JSON.stringify(edited.body));
-const delivered = await request("/api/equipment", "PATCH", { id, status: "entregado" });
+const delivered = await request("/api/equipment", "PATCH", { id, version: edited.body.equipment.version, status: "entregado" });
 assert.equal(delivered.body.equipment.invoiceTotalCents, 6999);
 assert.ok(delivered.body.equipment.invoiceNumber);
-const corrected = await request("/api/equipment", "PATCH", { id, laborCostCents: 6000 });
+const corrected = await request("/api/equipment", "PATCH", { id, version: delivered.body.equipment.version, laborCostCents: 6000 });
 assert.equal(corrected.body.equipment.invoiceTotalCents, 7999);
-const invalid = await request("/api/equipment", "PATCH", { id, customerPhone: "abc" });
+const invalid = await request("/api/equipment", "PATCH", { id, version: corrected.body.equipment.version, customerPhone: "abc" });
 assert.equal(invalid.status, 400);
 for (const values of [{ laborCostCents: true }, { laborCostCents: 2147483648 }, { notes: "a".repeat(2001) }, { id: [id], status: "anulado" }]) {
-  const rejected = await request("/api/equipment", "PATCH", { id, ...values });
+  const rejected = await request("/api/equipment", "PATCH", { id, version: corrected.body.equipment.version, ...values });
   assert.equal(rejected.status, 400);
 }
 const unchanged = await request(`/api/equipment?search=${encodeURIComponent(marker)}`);
@@ -46,7 +46,7 @@ assert.equal(unchanged.body.equipment[0].invoiceTotalCents, 7999, "Rechazar una 
 const catalog = await fetch(`${origin}/precios/`, { headers: { Cookie: cookie } });
 assert.equal(catalog.status, 200);
 assert.match(catalog.headers.get("cache-control"), /no-store/);
-const cancelled = await request("/api/equipment", "PATCH", { id, status: "anulado" });
+const cancelled = await request("/api/equipment", "PATCH", { id, version: corrected.body.equipment.version, status: "anulado" });
 assert.equal(cancelled.body.equipment.invoiceNumber, null);
 assert.equal(cancelled.body.equipment.invoiceTotalCents, null);
 assert.equal((await request(`/api/equipment?search=${encodeURIComponent(marker)}`)).body.total, 0);

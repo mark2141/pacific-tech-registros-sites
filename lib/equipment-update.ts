@@ -1,3 +1,4 @@
+import { parseWarrantyDays, parseEstimatedExitDate } from "./equipment-tracking.ts";
 import { validateEquipmentTextFields } from "./equipment-validation.ts";
 import { calculateTotals } from "./totals.ts";
 import {
@@ -27,6 +28,8 @@ const allowedStatuses = new Set([
 
 export type CurrentEquipmentRow = {
   id: number;
+  entryDate?: string;
+  estimatedExitDate?: string | null;
   status: string;
   exitDate: string | null;
   invoiceNumber: string | null;
@@ -59,6 +62,7 @@ const REQUIRED_TEXT_FIELDS = [
 ] as const;
 
 const OPTIONAL_TEXT_FIELDS = [
+  "serialNumber",
   "brand",
   "model",
   "accessories",
@@ -168,6 +172,15 @@ export function buildEquipmentUpdate(
   if ("entryDate" in payload && clean(payload.entryDate)) {
     const entryDate = parseOptionalIsoDate(payload.entryDate, "ingreso");
     if (entryDate) values.entryDate = entryDate;
+  }
+
+  if ("warrantyDays" in payload) values.warrantyDays = parseWarrantyDays(payload.warrantyDays);
+  if ("estimatedExitDate" in payload || "entryDate" in values) {
+    const entryDate = typeof values.entryDate === "string" ? values.entryDate : current.entryDate;
+    values.estimatedExitDate = parseEstimatedExitDate(
+      "estimatedExitDate" in payload ? payload.estimatedExitDate : current.estimatedExitDate,
+      entryDate,
+    );
   }
 
   if (status === "entregado") {

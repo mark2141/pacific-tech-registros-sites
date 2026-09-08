@@ -1,3 +1,4 @@
+import { isValidIsoDate } from "./equipment-values.ts";
 export const EQUIPMENT_LIST_STATUSES = [
   "ingreso",
   "diagnostico",
@@ -133,7 +134,16 @@ export function parseEquipmentListQuery(params: URLSearchParams) {
     );
   }
 
+  const technician = onlyValue(params, "technician")?.trim() ?? "";
+  if (technician.length > 100) throw new InvalidEquipmentQueryError("El técnico admite hasta 100 caracteres.");
+  const entryFrom = onlyValue(params, "entryFrom") || "";
+  const entryTo = onlyValue(params, "entryTo") || "";
+  if ((entryFrom && !isValidIsoDate(entryFrom)) || (entryTo && !isValidIsoDate(entryTo))) {
+    throw new InvalidEquipmentQueryError("Las fechas del filtro deben ser válidas.");
+  }
+  if (entryFrom && entryTo && entryFrom > entryTo) throw new InvalidEquipmentQueryError("La fecha inicial no puede ser posterior a la final.");
   return {
+    technician, entryFrom, entryTo,
     search,
     status: status as EquipmentListStatus,
     limit: Math.min(requestedLimit, MAX_EQUIPMENT_PAGE_SIZE),

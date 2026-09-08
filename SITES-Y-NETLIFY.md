@@ -77,6 +77,36 @@ código; no importa órdenes de pruebas ni reemplaza clientes existentes. Si má
 adelante se necesitan datos de Sites, deben exportarse y revisarse en una migración
 específica, resolviendo identificadores y números de orden antes de importar.
 
-Esta adaptación conserva las funciones existentes. No implementa todavía la
-bitácora, pagos parciales, permisos por función ni las demás mejoras propuestas
-en el análisis; pueden incorporarse como siguientes iteraciones compartidas.
+## Seguimiento, comunicación y reportes
+
+El código compartido incluye filtros por técnico y fecha de ingreso, entrega
+estimada, serial / IMEI, garantía configurable, comprobante imprimible, notas
+independientes y cambios de estado con fecha y autor. El historial comienza con
+esta actualización: las notas anteriores se conservan, sin inventar autores ni
+fechas. Cada edición exige la versión leída; un conflicto devuelve 409 y la
+interfaz permite cargar la orden actual después de revisar el borrador.
+
+Las migraciones nuevas agregan `equipment.version` (inicialmente 1),
+`equipment.estimated_exit_date` y `equipment_history`, preservando los registros.
+Las migraciones de PostgreSQL están en `netlify/database/migrations/`; Sites
+aplica el equivalente D1 desde `drizzle/`. Deben acompañar el código al desplegar.
+
+Los mensajes de WhatsApp y correo son enlaces con texto para revisar. El usuario
+envía desde su aplicación y luego pulsa «Registrar contacto realizado» para
+conservar destinatario, canal, texto y autor. Abrir el enlace no registra un envío
+ni demuestra recepción. No requiere servicios de mensajería ni claves adicionales.
+
+«Indicadores y reportes» separa carga actual (activos, listos y plazos vencidos)
+de resultados del período (ingresos no anulados, entregas y facturación por fecha
+de salida). El promedio mide días de ingreso a entrega; la agrupación usa el
+técnico asignado actualmente. Los importes facturados no representan pagos
+cobrados. Las consultas recorren páginas de 500 registros en el servidor.
+
+El CSV descarga todas las órdenes ingresadas en el período y técnico elegidos,
+incluidas las anuladas, con montos en USD y protección ante fórmulas en texto.
+El resumen de indicadores puede imprimirse o guardarse como PDF. Las rutas de
+reporte y descarga requieren sesión y envían `private, no-store`.
+
+Con la vista previa local abierta, `pnpm run test:tracking:local` comprueba estos
+flujos con datos ficticios y deja las órdenes creadas anuladas. Pagos parciales,
+inventario, permisos por función y portal del cliente siguen fuera de este bloque.
