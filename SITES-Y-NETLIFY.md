@@ -109,4 +109,34 @@ reporte y descarga requieren sesión y envían `private, no-store`.
 
 Con la vista previa local abierta, `pnpm run test:tracking:local` comprueba estos
 flujos con datos ficticios y deja las órdenes creadas anuladas. Pagos parciales,
-inventario, permisos por función y portal del cliente siguen fuera de este bloque.
+permisos por función y portal del cliente siguen pendientes.
+
+## Inventario de repuestos
+
+El botón «Inventario» abre el catálogo propio del taller: código único, nombre,
+proveedor, costo de compra, existencias y stock mínimo. Los códigos se guardan en
+mayúsculas. El inventario comienza vacío; el catálogo de precios anterior no se
+convierte en existencias supuestas. La alerta se activa cuando stock ≤ mínimo,
+incluido stock cero, y aparece también junto al botón de inventario.
+
+Las existencias iniciales y cada entrada o salida generan un movimiento con
+fecha, autor, motivo, cantidad, costo unitario y saldo resultante. Las correcciones
+de metadatos usan control de versión; las existencias se cambian mediante
+movimientos. El servidor impide stock negativo y repeticiones de la misma operación.
+
+Desde una orden, «Repuestos del inventario» permite asociar unidades y descontarlas
+atómicamente. Las devoluciones están vinculadas al consumo original, conservan su
+costo unitario y no pueden superar las unidades utilizadas. Se permiten devoluciones
+de órdenes cerradas; anular o entregar una orden no repone piezas automáticamente.
+Los movimientos asociados también aparecen en el historial de la orden. El costo
+de compra no modifica los precios facturados al cliente ni las notas anteriores.
+
+Las tablas `inventory_items` e `inventory_movements` tienen migraciones equivalentes
+en PostgreSQL y D1. Las operaciones de stock y auditoría comparten transacción;
+la implementación D1 usa lotes atómicos y actualizaciones condicionadas por versión.
+La autenticación es la misma que la del registro; este bloque no agrega roles.
+
+`pnpm run test:inventory:local` prueba consumos simultáneos, reintentos sin duplicados,
+devoluciones acotadas, costos históricos y acceso privado con datos ficticios.
+Deja el repuesto de prueba en la base local y la orden anulada. La publicación
+incluye sólo código y migraciones; no lleva esos datos al Site o a Netlify.

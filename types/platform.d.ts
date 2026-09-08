@@ -20,3 +20,12 @@ declare module "@platform/sign-in" {
   const SignIn: typeof import("../app/sign-in").default;
   export default SignIn;
 }
+declare module "@platform/inventory" {
+  export const getInventoryItem: typeof import("../platforms/netlify/inventory").getInventoryItem;
+  export const listInventory: typeof import("../platforms/netlify/inventory").listInventory;
+  export const createInventoryItem: typeof import("../platforms/netlify/inventory").createInventoryItem;
+  export const editInventoryItem: typeof import("../platforms/netlify/inventory").editInventoryItem;
+  export const listInventoryMovements: typeof import("../platforms/netlify/inventory").listInventoryMovements;
+  export const listOrderParts: typeof import("../platforms/netlify/inventory").listOrderParts;
+  export const moveInventory: typeof import("../platforms/netlify/inventory").moveInventory;
+}

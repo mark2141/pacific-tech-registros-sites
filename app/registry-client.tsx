@@ -39,6 +39,8 @@ import { MAX_MONEY_CENTS } from "../lib/equipment-values";
 import { EquipmentHistory } from "./equipment-history";
 import { EquipmentReports } from "./equipment-reports";
 import { CustomerContact } from "./customer-contact";
+import { InventoryPanel } from "./inventory-client";
+import { OrderInventory } from "./order-inventory";
 import { ReceptionReceipt } from "./reception-receipt";
 import { workshopDays } from "../lib/equipment-tracking";
 import { useSessionRenewal } from "./use-session-renewal";
@@ -238,6 +240,9 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
   const [detailReload, setDetailReload] = useState(0);
   const [receipt, setReceipt] = useState<Equipment | null>(null);
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [inventoryRefresh, setInventoryRefresh] = useState(0);
+  const [stockAlerts, setStockAlerts] = useState<number | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [loadedQueryKey, setLoadedQueryKey] = useState("");
   const [newOpen, setNewOpen] = useState(false);
@@ -247,6 +252,17 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
   const [form, setForm] = useState(createInitialForm);
   const [initialForm, setInitialForm] = useState(form);
   const newDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch("/api/inventory?low=1", { cache: "no-store", signal: controller.signal });
+        const data = await response.json() as { summary?: { lowStock: number } };
+        if (!controller.signal.aborted) setStockAlerts(response.ok ? data.summary?.lowStock ?? null : null);
+      } catch { if (!controller.signal.aborted) setStockAlerts(null); }
+    })();
+    return () => controller.abort();
+  }, [inventoryRefresh]);
   useUnsavedChanges(newOpen && (newDirty || saving));
   function closeNewRecord() {
     if (saving || (newDirty && !confirmDiscardChanges())) return;
@@ -522,6 +538,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
               tener dos pestañas. */}
           <a className="secondary-button" href="/precios/" target="_blank" rel="noopener noreferrer">Precios de repuestos</a>
           <button className="secondary-button" onClick={() => setReportsOpen(true)}>Indicadores y reportes</button>
+          <button className="secondary-button" onClick={() => setInventoryOpen(true)}>Inventario{Boolean(stockAlerts) && <span className="stock-count" aria-label={`${stockAlerts} repuestos con stock bajo`}>{stockAlerts}</span>}</button>
           <button className="primary-button" onClick={openNewRecord}><span>＋</span> Nuevo ingreso</button>
         </div>
       </header>
@@ -622,7 +639,8 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
         </form>
       </section></div>}
 
-      {detail && <DetailDrawer key={`${detail.id}:${detailReload}`} company={business.legalName} conflict={conflictId === detail.id} onReload={reloadLatestDetail} onShowReceipt={() => { setDetail(null); setReceipt(detail); }} record={detail} saving={saving} errorMessage={notice?.error ? notice.text : null} onClose={() => { setDetail(null); setConflictId(null); }} onUpdate={updateRecord} onInvoice={(values) => updateRecord(detail.id, { ...values, status: "entregado", exitDate: today() }, true)} onShowInvoice={() => { setDetail(null); setInvoice(detail); }} />}
+      {detail && <DetailDrawer key={`${detail.id}:${detailReload}`} onInventoryChanged={() => setInventoryRefresh(value => value + 1)} company={business.legalName} conflict={conflictId === detail.id} onReload={reloadLatestDetail} onShowReceipt={() => { setDetail(null); setReceipt(detail); }} record={detail} saving={saving} errorMessage={notice?.error ? notice.text : null} onClose={() => { setDetail(null); setConflictId(null); }} onUpdate={updateRecord} onInvoice={(values) => updateRecord(detail.id, { ...values, status: "entregado", exitDate: today() }, true)} onShowInvoice={() => { setDetail(null); setInvoice(detail); }} />}
+      {inventoryOpen && <InventoryPanel onClose={() => setInventoryOpen(false)} onChanged={() => setInventoryRefresh(value => value + 1)} />}
       {reportsOpen && <EquipmentReports technicians={technicians} company={business.legalName} onClose={() => setReportsOpen(false)} />}
       {receipt && <ReceptionReceipt record={receipt} business={business} onClose={() => setReceipt(null)} />}
       {invoice && <InvoiceModal record={invoice} business={business} onClose={() => setInvoice(null)} />}
@@ -630,7 +648,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
   );
 }
 
-function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoice, onShowInvoice, conflict, onReload, onShowReceipt, company }: { company: string; conflict: boolean; onReload: () => Promise<void>; onShowReceipt: () => void; record: Equipment; saving: boolean; errorMessage: string | null; onClose: () => void; onUpdate: (id: number, values: Record<string, unknown>) => Promise<Equipment | undefined>; onInvoice: (values: Record<string, unknown>) => Promise<Equipment | undefined>; onShowInvoice: () => void }) {
+function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoice, onShowInvoice, conflict, onReload, onShowReceipt, company, onInventoryChanged }: { onInventoryChanged: () => void; company: string; conflict: boolean; onReload: () => Promise<void>; onShowReceipt: () => void; record: Equipment; saving: boolean; errorMessage: string | null; onClose: () => void; onUpdate: (id: number, values: Record<string, unknown>) => Promise<Equipment | undefined>; onInvoice: (values: Record<string, unknown>) => Promise<Equipment | undefined>; onShowInvoice: () => void }) {
   const [draft, setDraft] = useState(() => ({
     ...record,
     laborDescription:
@@ -643,7 +661,9 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
   const [contactSaving, setContactSaving] = useState(false);
   const [contactDirty, setContactDirty] = useState(false);
   const [historyRefresh, setHistoryRefresh] = useState(0);
-  const busy = saving || noteSaving || contactSaving;
+  const [inventoryBusy, setInventoryBusy] = useState(false);
+  const [inventoryDirty, setInventoryDirty] = useState(false);
+  const busy = saving || noteSaving || contactSaving || inventoryBusy;
   const [warrantyInput, setWarrantyInput] = useState(String(record.warrantyDays));
   const warrantyValid = /^\d+$/.test(warrantyInput) && Number(warrantyInput) <= 3650;
   const [partsCostInput, setPartsCostInput] = useState(centsToDollarInput(record.partsCostCents));
@@ -676,7 +696,7 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
         damageNotes: draft.damageNotes,
       }
     : null;
-  const dirty = contactDirty || Boolean(note.trim()) || !updateValues || Object.entries(updateValues).some(([key, value]) => {
+  const dirty = inventoryDirty || contactDirty || Boolean(note.trim()) || !updateValues || Object.entries(updateValues).some(([key, value]) => {
     const original = key === "laborDescription" && record.laborDescription === DEFAULT_LABOR_DESCRIPTION
       ? "" : record[key as keyof Equipment];
     return value !== original;
@@ -735,10 +755,11 @@ function DetailDrawer({ record, saving, errorMessage, onClose, onUpdate, onInvoi
 
       <div className="cost-box"><h3>Costos del servicio</h3><label>Descripción de piezas<input maxLength={EQUIPMENT_TEXT_FIELDS.partsDescription.max} value={draft.partsDescription} onChange={(e) => setDraft({ ...draft, partsDescription: e.target.value })} placeholder="Pieza o repuesto utilizado" /></label><label className="money-field">Precio de piezas<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={partsCostCents === null} value={partsCostInput} onChange={(e) => setPartsCostInput(e.target.value)} /></label><label>Descripción de mano de obra<input maxLength={EQUIPMENT_TEXT_FIELDS.laborDescription.max} value={draft.laborDescription} onChange={(e) => setDraft({ ...draft, laborDescription: e.target.value })} placeholder="Ej. Diagnóstico, instalación o limpieza" /></label><label className="money-field">Mano de obra<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={laborCostCents === null} value={laborCostInput} onChange={(e) => setLaborCostInput(e.target.value)} /></label>{!costsValid && <p className="field-error" role="alert">Ingresa montos válidos, mayores o iguales a cero y con máximo dos decimales y un total de hasta $21,474,836.47.</p>}{costsValid && <div className="cost-summary"><div className="total-row"><span>Total estimado</span><strong>{formatMoney(totals.totalCents)}</strong></div></div>}</div>
     </fieldset>
-    <CustomerContact record={record} company={company} disabled={saving || noteSaving} onBusyChange={setContactSaving} onDirtyChange={setContactDirty} onSaved={() => setHistoryRefresh(value => value + 1)} />
-    <EquipmentHistory equipmentId={record.id} version={record.version + historyRefresh} legacyNote={record.notes} note={note} onNoteChange={setNote} disabled={saving || contactSaving} onBusyChange={setNoteSaving} />
+    <OrderInventory equipmentId={record.id} status={record.status} disabled={saving || noteSaving || contactSaving} onBusy={setInventoryBusy} onDirty={setInventoryDirty} onChanged={() => { setHistoryRefresh(value => value + 1); onInventoryChanged(); }} />
+    <CustomerContact record={record} company={company} disabled={saving || noteSaving || inventoryBusy} onBusyChange={setContactSaving} onDirtyChange={setContactDirty} onSaved={() => setHistoryRefresh(value => value + 1)} />
+    <EquipmentHistory equipmentId={record.id} version={record.version + historyRefresh} legacyNote={record.notes} note={note} onNoteChange={setNote} disabled={saving || contactSaving || inventoryBusy} onBusyChange={setNoteSaving} />
     {dirty && <p className="unsaved-hint" role="status">Cambios sin guardar</p>}
-    <div className="drawer-actions"><button className="secondary-button" disabled={busy || conflict || !updateValues} onClick={() => void saveChanges()}>Guardar cambios</button>{record.status !== "entregado" ? <button className="primary-button" disabled={busy || conflict || !updateValues} onClick={() => { if (updateValues && ((!note.trim() && !contactDirty) || confirmDiscardChanges())) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={busy} onClick={showSavedInvoice}>Ver factura</button>}</div>
+    <div className="drawer-actions"><button className="secondary-button" disabled={busy || conflict || !updateValues} onClick={() => void saveChanges()}>Guardar cambios</button>{record.status !== "entregado" ? <button className="primary-button" disabled={busy || conflict || !updateValues} onClick={() => { if (updateValues && ((!note.trim() && !contactDirty && !inventoryDirty) || confirmDiscardChanges())) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={busy} onClick={showSavedInvoice}>Ver factura</button>}</div>
   </section></div>;
 }
 

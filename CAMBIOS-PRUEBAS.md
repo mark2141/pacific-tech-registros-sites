@@ -45,3 +45,20 @@ locales; no se alteran las órdenes guardadas en el Site ni la base de Netlify.
 
 Este bloque agrega migraciones compatibles para Sites y Netlify. Los cambios
 de código no sincronizan ni importan los datos de prueba a Netlify.
+
+## Cuarta revisión: diseño discreto e inventario
+
+Los filtros por técnico y fecha siguen siendo desplegables. Los fondos generales,
+cabecera y tarjetas vuelven a superficies planas; se conservan acentos de color
+en bordes y botones.
+
+1. Abrir «Inventario» y crear un repuesto con proveedor, costo de compra, tres
+   existencias y mínimo de dos. Consultar el movimiento de existencias iniciales.
+2. Abrir una orden activa y desplegar «Repuestos del inventario». Asociar dos
+   unidades: debe quedar una en stock y activarse la alerta de stock bajo.
+3. Preparar una devolución y devolver una unidad: quedan dos disponibles. El
+   historial de la orden registra ambas operaciones con su autor.
+4. En inventario, cambiar el costo de compra. Una devolución del consumo anterior
+   conserva el costo registrado originalmente. No cambia el precio de la factura.
+5. Probar una cantidad superior al stock o devolver más unidades de las utilizadas:
+   el servidor rechaza el movimiento y conserva las existencias.

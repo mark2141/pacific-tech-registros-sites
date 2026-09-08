@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   doublePrecision,
   index,
   integer,
@@ -81,3 +83,35 @@ export const equipmentHistory = pgTable("equipment_history", {
   actorEmail: text("actor_email").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [index("idx_history_equipment_id").on(table.equipmentId, table.id)]);
+
+export const inventoryItems = pgTable("inventory_items", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  sku: text("sku").notNull().unique(),
+  name: text("name").notNull(),
+  supplier: text("supplier").notNull().default(""),
+  unitCostCents: integer("unit_cost_cents").notNull().default(0),
+  stock: integer("stock").notNull().default(0),
+  minimumStock: integer("minimum_stock").notNull().default(0),
+  version: integer("version").notNull().default(1),
+}, table => [check("inventory_stock_bounds", sql`${table.stock} BETWEEN 0 AND 1000000`),
+  check("inventory_minimum_bounds", sql`${table.minimumStock} BETWEEN 0 AND 1000000`),
+  check("inventory_cost_nonnegative", sql`${table.unitCostCents} >= 0`)]);
+
+export const inventoryMovements = pgTable("inventory_movements", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  operationId: text("operation_id").notNull().unique(),
+  itemId: integer("item_id").notNull().references(() => inventoryItems.id),
+  equipmentId: integer("equipment_id").references(() => equipment.id),
+  sourceMovementId: integer("source_movement_id"),
+  kind: text("kind").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitCostCents: integer("unit_cost_cents").notNull(),
+  stockAfter: integer("stock_after").notNull(),
+  note: text("note").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [index("idx_inventory_movements_item").on(table.itemId, table.id),
+  index("idx_inventory_movements_equipment").on(table.equipmentId, table.id),
+  index("idx_inventory_movements_source").on(table.sourceMovementId),
+  check("inventory_movement_nonzero", sql`${table.quantity} != 0`)]);

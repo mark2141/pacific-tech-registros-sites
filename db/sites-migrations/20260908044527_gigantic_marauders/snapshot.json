@@ -1,0 +1,952 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "53be1ead-ea22-4f34-8a43-8a13661d0ab3",
+  "prevIds": [
+    "2075e1cf-adc0-493b-b352-922762109174"
+  ],
+  "ddl": [
+    {
+      "name": "equipment",
+      "entityType": "tables"
+    },
+    {
+      "name": "equipment_history",
+      "entityType": "tables"
+    },
+    {
+      "name": "inventory_items",
+      "entityType": "tables"
+    },
+    {
+      "name": "inventory_movements",
+      "entityType": "tables"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "order_number",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_number",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "customer_name",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "customer_phone",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "customer_email",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "equipment_type",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'Sin asignar'",
+      "generated": null,
+      "name": "assigned_technician",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "brand",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "model",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "serial_number",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "accessories",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reported_issue",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "diagnosis",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "damage_notes",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "parts_description",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "parts_cost_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'Servicio técnico / mano de obra'",
+      "generated": null,
+      "name": "labor_description",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "labor_cost_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'ingreso'",
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "entry_date",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exit_date",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "estimated_exit_date",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_subtotal_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_tax_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_total_cents",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invoice_tax_rate",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "30",
+      "generated": null,
+      "name": "warranty_days",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "notes",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "CURRENT_TIMESTAMP",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "CURRENT_TIMESTAMP",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "equipment"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "equipment_id",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "message",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_status",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to_status",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "actor_user_id",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "actor_email",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "CURRENT_TIMESTAMP",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "equipment_history"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "inventory_items"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sku",
+      "entityType": "columns",
+      "table": "inventory_items"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "inventory_items"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "supplier",
+      "entityType": "columns",
+      "table": "inventory_items"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "unit_cost_cents",
+      "entityType": "columns",
+      "table": "inventory_items"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "stock",
+      "entityType": "columns",
+      "table": "inventory_items"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "minimum_stock",
+      "entityType": "columns",
+      "table": "inventory_items"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "inventory_items"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "item_id",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "equipment_id",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_movement_id",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "quantity",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "unit_cost_cents",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "stock_after",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "note",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "actor_user_id",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "actor_email",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "CURRENT_TIMESTAMP",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "inventory_movements"
+    },
+    {
+      "columns": [
+        "equipment_id"
+      ],
+      "tableTo": "equipment",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_equipment_history_equipment_id_equipment_id_fk",
+      "entityType": "fks",
+      "table": "equipment_history"
+    },
+    {
+      "columns": [
+        "item_id"
+      ],
+      "tableTo": "inventory_items",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_inventory_movements_item_id_inventory_items_id_fk",
+      "entityType": "fks",
+      "table": "inventory_movements"
+    },
+    {
+      "columns": [
+        "equipment_id"
+      ],
+      "tableTo": "equipment",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_inventory_movements_equipment_id_equipment_id_fk",
+      "entityType": "fks",
+      "table": "inventory_movements"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "equipment_pk",
+      "table": "equipment",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "equipment_history_pk",
+      "table": "equipment_history",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "inventory_items_pk",
+      "table": "inventory_items",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "inventory_movements_pk",
+      "table": "inventory_movements",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "updated_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_updated_at_id",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "status",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_status",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "exit_date",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_exit_date",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "status",
+          "isExpression": false
+        },
+        {
+          "value": "entry_date",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_status_entry_date",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "assigned_technician",
+          "isExpression": false
+        },
+        {
+          "value": "entry_date",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_technician_entry",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "customer_name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_equipment_customer_name",
+      "entityType": "indexes",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        {
+          "value": "equipment_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_history_equipment_id",
+      "entityType": "indexes",
+      "table": "equipment_history"
+    },
+    {
+      "columns": [
+        {
+          "value": "item_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_inventory_movements_item",
+      "entityType": "indexes",
+      "table": "inventory_movements"
+    },
+    {
+      "columns": [
+        {
+          "value": "equipment_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_inventory_movements_equipment",
+      "entityType": "indexes",
+      "table": "inventory_movements"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_movement_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_inventory_movements_source",
+      "entityType": "indexes",
+      "table": "inventory_movements"
+    },
+    {
+      "columns": [
+        "order_number"
+      ],
+      "nameExplicit": false,
+      "name": "equipment_order_number_unique",
+      "entityType": "uniques",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        "invoice_number"
+      ],
+      "nameExplicit": false,
+      "name": "equipment_invoice_number_unique",
+      "entityType": "uniques",
+      "table": "equipment"
+    },
+    {
+      "columns": [
+        "sku"
+      ],
+      "nameExplicit": false,
+      "name": "inventory_items_sku_unique",
+      "entityType": "uniques",
+      "table": "inventory_items"
+    },
+    {
+      "columns": [
+        "operation_id"
+      ],
+      "nameExplicit": false,
+      "name": "inventory_movements_operation_id_unique",
+      "entityType": "uniques",
+      "table": "inventory_movements"
+    },
+    {
+      "value": "\"stock\" BETWEEN 0 AND 1000000",
+      "name": "inventory_stock_bounds",
+      "entityType": "checks",
+      "table": "inventory_items"
+    },
+    {
+      "value": "\"minimum_stock\" BETWEEN 0 AND 1000000",
+      "name": "inventory_minimum_bounds",
+      "entityType": "checks",
+      "table": "inventory_items"
+    },
+    {
+      "value": "\"unit_cost_cents\" >= 0",
+      "name": "inventory_cost_nonnegative",
+      "entityType": "checks",
+      "table": "inventory_items"
+    },
+    {
+      "value": "\"quantity\" != 0",
+      "name": "inventory_movement_nonzero",
+      "entityType": "checks",
+      "table": "inventory_movements"
+    }
+  ],
+  "renames": []
+}
