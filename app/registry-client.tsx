@@ -554,12 +554,19 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
             </div>
           </div>
         </div>
-        <div className="tracking-filters" role="group" aria-label="Filtrar por técnico y fecha de ingreso">
+        <details className="tracking-disclosure">
+          <summary>
+            <span>Filtros por técnico y fecha</span>
+            {(technician || entryFrom || entryTo) && <span className="filter-active-count">{[technician, entryFrom, entryTo].filter(Boolean).length} activos</span>}
+          </summary>
+          {(technician || entryFrom || entryTo) && <p className="active-filter-description">{[technician, entryFrom && `Desde ${formatDate(entryFrom)}`, entryTo && `Hasta ${formatDate(entryTo)}`].filter(Boolean).join(" · ")}</p>}
+          <div className="tracking-filters" role="group" aria-label="Filtrar por técnico y fecha de ingreso">
           <label>Técnico<select value={technician} onChange={event => setTechnician(event.target.value)}><option value="">Todos los técnicos</option>{Array.from(new Set([...technicians, ...(technician ? [technician] : [])])).map(name => <option key={name} value={name}>{name}</option>)}</select></label>
           <label>Ingreso desde<input type="date" value={entryFrom} max={entryTo || undefined} onChange={event => setEntryFrom(event.target.value)} /></label>
           <label>Ingreso hasta<input type="date" value={entryTo} min={entryFrom || undefined} onChange={event => setEntryTo(event.target.value)} /></label>
           <small>Las métricas superiores y los contadores por estado muestran el total general.</small>
-        </div>
+          </div>
+        </details>
         <div className="tabs" role="group" aria-label="Filtrar por estado">
           <button aria-pressed={filter === "todos"} className={filter === "todos" ? "active" : ""} onClick={() => setFilter("todos")}>Todos <b>{liveTotal}</b></button>
           {statusOptions.map(([value, label]) => <button key={value} aria-pressed={filter === value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label} <b>{statusCounts[value]}</b></button>)}
