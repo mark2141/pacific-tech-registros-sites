@@ -7,13 +7,13 @@ import { escapeLikePattern, serializeEquipmentCursor } from "../../lib/equipment
 import { todayInPanama } from "../../lib/panama-date";
 import { getSitesDb } from "./database";
 import { protectPaidOrder, PaymentError } from "../../lib/payments";
-import { canEditPayload } from "../../lib/permissions";
+import { canAccessOrder, canEditPayload } from "../../lib/permissions";
 
 // Only these application-owned column names enter SQL. Values are always bound.
 const columns = {
   id: "id", orderNumber: "order_number", invoiceNumber: "invoice_number",
   customerName: "customer_name", customerPhone: "customer_phone", customerEmail: "customer_email",
-  equipmentType: "equipment_type", assignedTechnician: "assigned_technician",
+  equipmentType: "equipment_type", assignedTechnician: "assigned_technician", assignedMemberId: "assigned_member_id",
   brand: "brand", model: "model", serialNumber: "serial_number", accessories: "accessories",
   reportedIssue: "reported_issue", diagnosis: "diagnosis", damageNotes: "damage_notes",
   partsDescription: "parts_description", partsCostCents: "parts_cost_cents",
@@ -31,7 +31,7 @@ function rowFrom(raw: RawRow): EquipmentRow {
   return { ...raw, createdAt: new Date(raw.createdAt), updatedAt: new Date(raw.updatedAt) };
 }
 
-export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo }: EquipmentListQuery) {
+export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo, scopeMemberId }: EquipmentListQuery) {
   const db = getSitesDb();
   const conditions = [status === "todos" ? "status != ?" : "status = ?"];
   const values: (string | number)[] = [status === "todos" ? "anulado" : status];
@@ -43,6 +43,7 @@ export async function listEquipment({ search, status, limit, offset, cursor, tec
   if (technician) { conditions.push("assigned_technician = ?"); values.push(technician); }
   if (entryFrom) { conditions.push("entry_date >= ?"); values.push(entryFrom); }
   if (entryTo) { conditions.push("entry_date <= ?"); values.push(entryTo); }
+  if(scopeMemberId){conditions.push("assigned_member_id = ?");values.push(scopeMemberId);}
   const where = conditions.join(" AND ");
   const pageWhere = cursor ? `${where} AND id < ?` : where;
   const pageValues = cursor ? [...values, cursor.id] : [...values];
@@ -50,9 +51,9 @@ export async function listEquipment({ search, status, limit, offset, cursor, tec
   const results = await db.batch([
     db.prepare(`SELECT ${selection} FROM equipment WHERE ${pageWhere} ORDER BY id DESC LIMIT ? OFFSET ?`).bind(...pageValues, limit + 1, offset),
     db.prepare(`SELECT COUNT(*) AS total FROM equipment WHERE ${where}`).bind(...values),
-    db.prepare("SELECT status, COUNT(*) AS count FROM equipment GROUP BY status"),
+    db.prepare(`SELECT status, COUNT(*) AS count FROM equipment ${scopeMemberId?"WHERE assigned_member_id=?":""} GROUP BY status`).bind(...(scopeMemberId?[scopeMemberId]:[])),
     db.prepare("SELECT COALESCE(SUM(invoice_total_cents), 0) AS revenue FROM equipment WHERE exit_date LIKE ?").bind(monthPrefix),
-    db.prepare("SELECT DISTINCT assigned_technician AS name FROM equipment ORDER BY assigned_technician"),
+    db.prepare(`SELECT DISTINCT assigned_technician AS name FROM equipment ${scopeMemberId?"WHERE assigned_member_id=?":""} ORDER BY assigned_technician`).bind(...(scopeMemberId?[scopeMemberId]:[])),
   ]);
   const page = results[0].results as RawRow[];
   const hasMore = page.length > limit;
@@ -107,6 +108,7 @@ export async function updateEquipment(id: number, payload: Record<string, unknow
   const version = expectedVersion(payload.version);
   const db = getSitesDb();
   const current = await getEquipment(id);
+  if (!canAccessOrder(actor,current)) return null;
   if (!current) return null;
   if (current.version !== version) throw new EquipmentConflictError();
   if (actor.role && !canEditPayload(actor.role, payload, current.status)) throw new PaymentError("Tu rol no permite modificar esta orden.", 403);
@@ -129,6 +131,7 @@ export async function updateEquipment(id: number, payload: Record<string, unknow
       SELECT ?, 'estado', ?, ?, ?, ?, ? WHERE changes() = 1`)
       .bind(id, current.status, newStatus, actor.userId, actor.email, new Date().toISOString()));
   }
+  if("assignedMemberId" in values&&values.assignedMemberId!==current.assignedMemberId)statements.push(db.prepare(`INSERT INTO equipment_history(equipment_id,kind,message,actor_user_id,actor_email,created_at) SELECT ?,\x27asignacion\x27,?,?,?,? WHERE changes()=1`).bind(id,`Asignación: ${current.assignedTechnician} → ${values.assignedTechnician}`,actor.userId,actor.email,new Date().toISOString()));
   const results = await db.batch(statements);
   const raw = results[0].results[0] as RawRow | undefined;
   if (!raw) throw new EquipmentConflictError();
@@ -146,8 +149,8 @@ export async function listEquipmentHistory(id: number, before?: number) {
 export async function addEquipmentNote(id: number, message: string, actor: EquipmentActor, kind: "nota" | "contacto" = "nota") {
   const raw = await getSitesDb().prepare(`INSERT INTO equipment_history
     (equipment_id, kind, message, actor_user_id, actor_email, created_at)
-    SELECT id, ?, ?, ?, ?, ? FROM equipment WHERE id = ? RETURNING ${historySelection}`)
-    .bind(kind, message, actor.userId, actor.email, new Date().toISOString(), id).first<RawHistory>();
+    SELECT id, ?, ?, ?, ?, ? FROM equipment WHERE id = ? ${actor.role==="tecnico"?"AND assigned_member_id=?":""} RETURNING ${historySelection}`)
+    .bind(kind, message, actor.userId, actor.email, new Date().toISOString(), id,...(actor.role==="tecnico"?[actor.memberId??-1]:[])).first<RawHistory>();
   return raw ? historyFrom(raw) : null;
 }
 

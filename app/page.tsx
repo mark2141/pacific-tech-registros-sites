@@ -3,6 +3,7 @@ import { resolveBusinessInfo } from "../lib/business-info";
 import { getEnv } from "../lib/runtime-env";
 import { readRefreshCookie } from "../lib/session-cookie";
 import { getAuthUser, signOutPath, previewLabel } from "./auth";
+import { getAuthUser as getIdentity } from "@platform/auth";
 import RegistryClient from "./registry-client";
 import SignIn from "@platform/sign-in";
 
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const user = await getAuthUser();
   if (!user) {
+    if(await getIdentity())return <main className="app-shell"><h1>Acceso bloqueado</h1><p>Tu cuenta no tiene acceso al registro del taller. Contacta al administrador para revisar tus permisos.</p></main>;
     // Sin sesión válida pero con token de refresco: la pantalla de acceso
     // intenta recuperarla sola antes de pedir la contraseña. Es el caso de
     // quien vuelve al día siguiente y solo se le venció el token de una hora.
@@ -28,6 +30,7 @@ export default async function Home() {
       previewLabel={previewLabel}
       userEmail={user.email}
       role={user.role}
+      memberId={user.memberId}
       signOutPath={signOutPath()}
       business={resolveBusinessInfo(getEnv())}
     />

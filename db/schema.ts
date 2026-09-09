@@ -23,6 +23,7 @@ export const equipment = pgTable(
     customerEmail: text("customer_email").notNull().default(""),
     equipmentType: text("equipment_type").notNull(),
     assignedTechnician: text("assigned_technician").notNull().default("Sin asignar"),
+    assignedMemberId: integer("assigned_member_id"),
     brand: text("brand").notNull().default(""),
     model: text("model").notNull().default(""),
     serialNumber: text("serial_number").notNull().default(""),
@@ -147,3 +148,19 @@ export const attachments = pgTable("attachments", {
   actorEmail: text("actor_email").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [index("idx_attachments_equipment").on(table.equipmentId, table.id)]);
+export const staff = pgTable("staff", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  role: text("role").notNull(),
+  enabled: integer("enabled").notNull().default(1),
+  protected: integer("protected").notNull().default(0),
+  version: integer("version").notNull().default(1),
+});
+export const staffAudit = pgTable("staff_audit", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  staffId: integer("staff_id").notNull().references(()=>staff.id),
+  message: text("message").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

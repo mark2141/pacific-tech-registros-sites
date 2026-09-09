@@ -1,4 +1,5 @@
 import catalogHtml from "./catalog.html?raw";
+import { canSeeFinance } from "../../lib/permissions";
 import { getAuthUser } from "../auth";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ const PRIVATE_HEADERS = {
 
 export async function GET() {
   const user = await getAuthUser();
-  if (!user) {
+  if (!user||!canSeeFinance(user.role)) {
     return new Response("Acceso denegado: se requiere una sesión válida.", {
       status: 403,
       headers: {

@@ -1,5 +1,22 @@
 # Primera revisión: cuatro cambios pequeños
 
+## Revisión actual: administración y vistas por rol
+
+- Administrador: abrir «Usuarios y permisos», añadir una cuenta de técnico,
+  modificar su nombre o bloquear/reactivar su acceso. El correo es su identidad;
+  añadirlo aquí no envía invitaciones ni modifica el acceso privado del Site.
+- Asignar una orden a esa cuenta desde el selector de técnico. Las órdenes viejas
+  conservan el nombre anterior hasta vincularlas; no se asignan automáticamente.
+- Técnico: «Mis órdenes» y métricas solo de su cuenta, sin importes ni pagos.
+- Solo lectura: todas las órdenes en consulta, sin información económica estructurada.
+- Administrador y recepción conservan los importes y flujos de cobro existentes.
+- Las cuentas bloqueadas no acceden al registro. No se permite bloquear al
+  administrador protegido ni cambiar el rol de la propia cuenta.
+- La vista del cliente se retiró a petición del usuario. Odoo queda para después.
+
+Las secciones siguientes documentan revisiones anteriores; esta sección describe
+el estado actual de roles y acceso de clientes.
+
 ## Revisión actual: archivos, copia de registros y vista del cliente
 
 - Abre una orden y despliega «Fotos y adjuntos». Elige una imagen o PDF (hasta

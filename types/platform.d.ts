@@ -47,3 +47,11 @@ declare module "@platform/attachments" {
 declare module "@platform/backup" {
   export const exportRecords: typeof import("../platforms/netlify/backup").exportRecords;
 }
+declare module "@platform/staff" {
+  export const getStaff: typeof import("../platforms/netlify/staff").getStaff;
+  export const ensureStaff: typeof import("../platforms/netlify/staff").ensureStaff;
+  export const listStaff: typeof import("../platforms/netlify/staff").listStaff;
+  export const listTechnicians: typeof import("../platforms/netlify/staff").listTechnicians;
+  export const saveStaff: typeof import("../platforms/netlify/staff").saveStaff;
+  export const listStaffAudit: typeof import("../platforms/netlify/staff").listStaffAudit;
+}

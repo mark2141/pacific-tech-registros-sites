@@ -20,10 +20,10 @@ try{
   const preview=await request(`/api/equipment/attachments?id=${attachment.id}&preview=1`);assert.match(preview.headers.get("content-disposition"),/inline/);
   const backup=await request("/api/backup");assert.equal(backup.status,200);const copy=await backup.json();assert.equal(copy.format,"pacific-tech-records");assert.equal(copy.includesFileBytes,false);assert.ok(copy.tables.attachments.some(a=>a.id===attachment.id));assert.ok(copy.tables.equipment.some(e=>e.id===order.id));assert.ok(copy.tables.equipment_history.some(e=>e.message===privateNote));
   assert.equal((await fetch(origin+"/api/backup")).status,403);
-  const customer=await request(`/cliente?orden=${order.id}`);assert.equal(customer.status,200);const html=await customer.text();assert.ok(!html.includes(privateNote));assert.ok(!html.includes("object_key"));assert.ok(html.includes(order.orderNumber));
+  const customer=await request(`/cliente?orden=${order.id}`);assert.equal(customer.status,404);
   const anonymous=await fetch(origin+`/cliente?orden=${order.id}`);assert.ok(!(await anonymous.text()).includes(order.customerName));
   const history=await(await request(`/api/equipment/history?equipmentId=${order.id}`)).json();assert.equal(history.history.filter(e=>e.kind==="adjunto").length,1);
-  console.log("OK D1/R2: carga y descarga exacta, reintentos concurrentes, tipo validado, archivos privados, copia consistente y vista sin notas internas.");
+  console.log("OK D1/R2: carga y descarga exacta, reintentos concurrentes, tipo validado, archivos privados, copia consistente y retirada de la vista del cliente.");
 }finally{
   order=(await(await request(`/api/equipment/detail?id=${order.id}`)).json()).equipment;
   await request("/api/equipment",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:order.id,version:order.version,status:"anulado"})});

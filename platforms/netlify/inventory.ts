@@ -1,4 +1,5 @@
 import { and, count, desc, eq, ilike, lt, lte, or, sql } from "drizzle-orm";
+import { canAccessOrder } from "../../lib/permissions";
 import { getDb } from "../../db";
 import { equipment, equipmentHistory, inventoryItems as items, inventoryMovements as movements } from "../../db/schema";
 import { escapeLikePattern } from "../../lib/equipment-query";
@@ -52,7 +53,7 @@ export async function moveInventory(input: MovementInput, actor: EquipmentActor)
     let orderStatus: string | undefined;
     if (input.equipmentId) {
       const [order] = await tx.select().from(equipment).where(eq(equipment.id, input.equipmentId)).for("update");
-      if (!order) throw new InventoryError("No se encontró la orden.", 404);
+      if (!order||!canAccessOrder(actor,order)) throw new InventoryError("No se encontró la orden.", 404);
       orderStatus = order.status;
     }
     const [item] = await tx.select().from(items).where(eq(items.id, input.itemId)).for("update");

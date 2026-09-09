@@ -17,7 +17,7 @@ import {
 } from "drizzle-orm";
 import { getDb } from "../../db";
 import { protectPaidOrder, PaymentError } from "../../lib/payments";
-import { canEditPayload } from "../../lib/permissions";
+import { canAccessOrder, canEditPayload } from "../../lib/permissions";
 import { equipment, equipmentHistory } from "../../db/schema";
 import { isUniqueConstraintError } from "../../lib/database-error";
 import { buildEquipmentUpdate } from "../../lib/equipment-update";
@@ -26,7 +26,7 @@ import { todayInPanama } from "../../lib/panama-date";
 import { escapeLikePattern, serializeEquipmentCursor } from "../../lib/equipment-query";
 import type { EquipmentActor, EquipmentListQuery, NewEquipmentInput } from "../../lib/equipment-repository";
 
-export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo }: EquipmentListQuery) {
+export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo, scopeMemberId }: EquipmentListQuery) {
     const db = getDb();
 
     // La búsqueda se ejecuta sobre toda la tabla, no solo sobre los cien
@@ -52,7 +52,8 @@ export async function listEquipment({ search, status, limit, offset, cursor, tec
       status === "todos"
         ? ne(equipment.status, "anulado")
         : eq(equipment.status, status);
-    const listCondition = and(statusCondition, searchCondition,
+    const scopeCondition=scopeMemberId?eq(equipment.assignedMemberId,scopeMemberId):undefined;
+    const listCondition = and(statusCondition, searchCondition,scopeCondition,
       technician ? eq(equipment.assignedTechnician, technician) : undefined,
       entryFrom ? gte(equipment.entryDate, entryFrom) : undefined,
       entryTo ? lte(equipment.entryDate, entryTo) : undefined);
@@ -84,14 +85,14 @@ export async function listEquipment({ search, status, limit, offset, cursor, tec
       db
         .select({ status: equipment.status, count: count() })
         .from(equipment)
-        .groupBy(equipment.status),
+        .where(scopeCondition).groupBy(equipment.status),
       db
         .select({
           monthRevenueCents: sql<number>`COALESCE(SUM(${equipment.invoiceTotalCents}), 0)`,
         })
         .from(equipment)
         .where(like(equipment.exitDate, monthPrefix)),
-      db.selectDistinct({ name: equipment.assignedTechnician }).from(equipment).orderBy(asc(equipment.assignedTechnician)),
+      db.selectDistinct({ name: equipment.assignedTechnician }).from(equipment).where(scopeCondition).orderBy(asc(equipment.assignedTechnician)),
     ]);
 
     const hasMore = pageRows.length > limit;
@@ -153,6 +154,7 @@ export async function updateEquipment(id: number, payload: Record<string, unknow
   const version = expectedVersion(payload.version);
   return getDb().transaction(async tx => {
     const [current] = await tx.select().from(equipment).where(eq(equipment.id, id)).limit(1).for("update");
+    if (!canAccessOrder(actor,current)) return null;
     if (!current) return null;
     if (current.version !== version) throw new EquipmentConflictError();
     if (actor.role && !canEditPayload(actor.role, payload, current.status)) throw new PaymentError("Tu rol no permite modificar esta orden.", 403);
@@ -165,6 +167,7 @@ export async function updateEquipment(id: number, payload: Record<string, unknow
       await tx.insert(equipmentHistory).values({ equipmentId: id, kind: "estado",
         fromStatus: current.status, toStatus: updated.status, actorUserId: actor.userId, actorEmail: actor.email });
     }
+    if("assignedMemberId" in values&&values.assignedMemberId!==current.assignedMemberId)await tx.insert(equipmentHistory).values({equipmentId:id,kind:"asignacion",message:`Asignación: ${current.assignedTechnician} → ${updated.assignedTechnician}`,actorUserId:actor.userId,actorEmail:actor.email});
     return updated;
   });
 }
@@ -179,7 +182,8 @@ export async function listEquipmentHistory(id: number, before?: number) {
 
 export async function addEquipmentNote(id: number, message: string, actor: EquipmentActor, kind: "nota" | "contacto" = "nota") {
   return getDb().transaction(async tx => {
-    const [row] = await tx.select({ id: equipment.id }).from(equipment).where(eq(equipment.id, id)).limit(1);
+    const [row] = await tx.select().from(equipment).where(eq(equipment.id, id)).limit(1).for("update");
+    if(!canAccessOrder(actor,row))return null;
     if (!row) return null;
     const [event] = await tx.insert(equipmentHistory).values({ equipmentId: id, kind, message,
       actorUserId: actor.userId, actorEmail: actor.email }).returning();

@@ -59,6 +59,7 @@ export async function moveInventory(input: MovementInput, actor: EquipmentActor)
   if (input.equipmentId) {
     conditions.push(`EXISTS (SELECT 1 FROM equipment WHERE id=?${input.kind === "consumo" ? " AND status NOT IN ('entregado','anulado')" : ""})`); bindings.push(input.equipmentId);
   }
+  if(actor.role==="tecnico"){conditions.push("EXISTS (SELECT 1 FROM equipment WHERE id=? AND assigned_member_id=?)");bindings.push(input.equipmentId??-1,actor.memberId??-1);}
   if (input.sourceMovementId) {
     const source = await db.prepare(`SELECT ${movementSelection} FROM inventory_movements WHERE id=?`).bind(input.sourceMovementId).first<InventoryMovement>();
     if (!source || source.kind !== "consumo" || source.itemId !== item.id || source.equipmentId !== input.equipmentId) throw new InventoryError("La devolución no corresponde a un consumo de esta orden.", 409);

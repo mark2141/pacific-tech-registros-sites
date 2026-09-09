@@ -414,3 +414,8 @@ textarea { resize: vertical; min-height: 78px; line-height: 1.4; }
 .customer-preview dt { font-weight: 700; }
 .customer-preview dd { margin: 0 0 12px; color: var(--muted); }
 .edit-entry > fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.operational-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.staff-list { padding: 0; list-style: none; }
+.staff-list li { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.staff-list span { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+@media(max-width:550px){.operational-metrics{grid-template-columns:1fr;}}

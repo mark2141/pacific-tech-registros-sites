@@ -1,5 +1,12 @@
 export const roleLabels = { admin: "Administrador", recepcion: "Recepción", tecnico: "Técnico", lectura: "Solo lectura" } as const;
 export type Role = keyof typeof roleLabels;
+export function canSeeFinance(role:Role){return role==="admin"||role==="recepcion";}
+export function canAccessOrder(user:{role?:Role;memberId?:number},order:{assignedMemberId?:number|null}|null|undefined){return Boolean(order)&&(user.role!=="tecnico"||Boolean(user.memberId&&order?.assignedMemberId===user.memberId));}
+const financialFields=new Set(["partsCostCents","laborCostCents","paidCents","invoiceSubtotalCents","invoiceTaxCents","invoiceTotalCents","invoiceTaxRate","monthRevenueCents","unitCostCents"]);
+export function operationalData<T>(value:T,role:Role):T {
+  if(canSeeFinance(role))return value;
+  return JSON.parse(JSON.stringify(value,(key,item)=>financialFields.has(key)?undefined:Array.isArray(item)?item.filter(row=>!row||!["pago","contacto"].includes(row.kind)):key==="lastContact"?null:item)) as T;
+}
 export type Permission = "receive" | "edit" | "charge" | "reverse" | "stock" | "consume" | "note";
 export function can(role: Role, permission: Permission) {
   if (role === "admin") return true;

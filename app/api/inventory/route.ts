@@ -1,9 +1,10 @@
 import { getInventoryItem, listInventory, createInventoryItem, editInventoryItem } from "@platform/inventory";
+import { accessJson as json } from "../../equipment-access";
 import { getAuthUser } from "../../auth";
 import { can } from "../../../lib/permissions";
 import { inventoryId, inventoryInteger, inventoryMetadata, inventoryParamId, inventoryQuery } from "../../../lib/inventory";
 import { readEquipmentPayload } from "../../../lib/equipment-validation";
-import { inventoryFailure, inventoryJson as json } from "./response";
+import { inventoryFailure } from "./response";
 
 export async function GET(request: Request) {
   try {

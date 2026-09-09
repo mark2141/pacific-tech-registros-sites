@@ -1,6 +1,6 @@
 import { getAuthUser } from "../../../auth";
-import { can } from "../../../../lib/permissions";
-import { getEquipment } from "@platform/equipment";
+import { can,canSeeFinance } from "../../../../lib/permissions";
+import { getEquipment } from "../../../equipment-access";
 import { listPayments, recordPayment } from "@platform/payments";
 import { paymentInput, positiveId, PaymentError, balance } from "../../../../lib/payments";
 import { readEquipmentPayload, InvalidEquipmentPayloadError } from "../../../../lib/equipment-validation";
@@ -13,7 +13,7 @@ function failure(error: unknown) {
 }
 export async function GET(request: Request) {
   try {
-    if (!await getAuthUser()) return json({ error: "Acceso denegado." }, 403);
+    const viewer=await getAuthUser();if (!viewer||!canSeeFinance(viewer.role)) return json({ error: "Acceso denegado." }, 403);
     const params = new URL(request.url).searchParams;
     const id = positiveId(Number(params.get("equipmentId"))), before = params.has("before") ? positiveId(Number(params.get("before"))) : undefined;
     const equipment = await getEquipment(id);

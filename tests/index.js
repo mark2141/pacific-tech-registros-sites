@@ -24,3 +24,4 @@ import "./equipment-reports.test.mjs";
 import "./inventory.test.mjs";
 import "./payments-permissions.test.mjs";
 import "./attachments.test.mjs";
+import "./staff.test.mjs";

@@ -1,4 +1,5 @@
 import { listReportRows } from "@platform/equipment";
+import { canSeeFinance } from "../../../../lib/permissions";
 import { getAuthUser } from "../../../auth";
 import { todayInPanama } from "../../../../lib/panama-date";
 import { InvalidEquipmentQueryError } from "../../../../lib/equipment-query";
@@ -7,7 +8,7 @@ import { parseReportQuery, createReport, accumulateReport, finishReport } from "
 const headers = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   try {
-    if (!await getAuthUser()) return Response.json({ error: "Acceso denegado." }, { status: 403, headers });
+    const viewer=await getAuthUser();if (!viewer||!canSeeFinance(viewer.role)) return Response.json({ error: "Acceso denegado." }, { status: 403, headers });
     const today = todayInPanama();
     const query = parseReportQuery(new URL(request.url).searchParams, today);
     const report = createReport(query, today);

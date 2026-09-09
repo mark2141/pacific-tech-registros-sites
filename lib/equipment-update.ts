@@ -125,6 +125,7 @@ export function buildEquipmentUpdate(
   };
 
   if (status) values.status = status;
+  if("assignedMemberId" in payload)values.assignedMemberId=payload.assignedMemberId as number|null;
   if ("assignedTechnician" in payload) {
     values.assignedTechnician = clean(payload.assignedTechnician) || "Sin asignar";
   }

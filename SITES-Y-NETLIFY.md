@@ -108,8 +108,7 @@ El resumen de indicadores puede imprimirse o guardarse como PDF. Las rutas de
 reporte y descarga requieren sesión y envían `private, no-store`.
 
 Con la vista previa local abierta, `pnpm run test:tracking:local` comprueba estos
-flujos con datos ficticios y deja las órdenes creadas anuladas. La vista privada del
-cliente se describe abajo; su acceso externo sigue pendiente.
+flujos con datos ficticios y deja las órdenes creadas anuladas. La vista del cliente fue retirada; la integración comercial queda fuera de esta aplicación.
 
 ## Inventario de repuestos
 
@@ -142,41 +141,57 @@ devoluciones acotadas, costos históricos y acceso privado con datos ficticios.
 Deja el repuesto de prueba en la base local y la orden anulada. La publicación
 incluye sólo código y migraciones; no lleva esos datos al Site o a Netlify.
 
-## Roles y permisos
+## Roles, usuarios y asignaciones
 
-`APP_USER_ROLES` es un objeto JSON en el entorno del servidor que asigna un ID de
-usuario verificado o un correo en minúsculas a `admin`, `recepcion`, `tecnico` o
-`lectura`. Un ID explícito prevalece sobre el correo. No se aceptan roles enviados
-por el navegador. Una cuenta sin asignación o una configuración inválida obtiene
-solo lectura; el proveedor sigue siendo quien decide si puede acceder al sitio.
+«Usuarios y permisos» permite a Administrador añadir cuentas por correo, cambiar
+nombre/rol y bloquear o reactivar accesos. No envía invitaciones, crea contraseñas
+ni cambia el acceso del proveedor (Sites privado o Netlify Identity). Los cambios
+se aplican en las siguientes solicitudes; la interfaz ya abierta se actualiza al
+recargar. Los datos ya vistos no pueden retirarse de un navegador remoto.
 
-Ejemplo: `{"dueño@ejemplo.com":"admin","recepcion@ejemplo.com":"recepcion","tecnico@ejemplo.com":"tecnico"}`.
-La asignación se administra en las variables de entorno de Sites o Netlify; esta
-versión no agrega una pantalla para invitar usuarios ni cambiar sus roles. Cambiar
-esta variable requiere publicar de nuevo. No concede acceso al Site ni invita a
-nadie: el acceso privado y Netlify Identity siguen siendo independientes.
+Las tablas `staff` y `staff_audit` guardan roles, estado, versión y auditoría de
+cambios. El correo verificado identifica la cuenta; no se puede cambiar desde la
+interfaz. `APP_USER_ROLES` **solo inicializa una cuenta que aún no existe** cuando
+inicia sesión; posteriormente prevalece el rol de la base. Usuarios sin asignación
+inicial reciben solo lectura. Los administradores inicializados desde esa variable
+quedan protegidos: no pueden desactivarse ni cambiarse de rol desde la aplicación.
+Tampoco se permite cambiar el propio rol o bloquear la propia cuenta. Las cuentas
+no se borran. Esto conserva al menos el administrador protegido inicial incluso
+ante cambios simultáneos entre otros administradores.
 
-| Acción | Administrador | Recepción | Técnico | Solo lectura |
-| --- | --- | --- | --- | --- |
-| Consultar órdenes, costos, reportes, inventario y pagos | Sí | Sí | Sí | Sí |
-| Ingresos, datos del cliente, importes, entrega, anulación/reapertura | Sí | Sí | No | No |
-| Diagnóstico, descripciones, plazo y estado operativo de órdenes abiertas | Sí | Sí | Sí | No |
-| Notas, contacto, consumo/devolución de repuestos | Sí | Sí | Sí | No |
-| Catálogo y entradas/salidas manuales de stock | Sí | Sí | No | No |
-| Registrar abonos | Sí | Sí | No | No |
-| Anular un pago registrado | Sí | No | No | No |
+| Rol | Vista y permisos |
+| --- | --- |
+| Administrador | Todas las órdenes, información económica, inventario, cobros, anulaciones de pago, copias y gestión de usuarios. |
+| Recepción | Todas las órdenes, datos de clientes, importes, entregas, inventario y cobros. No gestiona usuarios, descarga copias generales ni anula pagos. |
+| Técnico | «Mis órdenes»: únicamente las asignadas a su cuenta, incluidos contadores y búsqueda. Trabajo, notas, adjuntos y consumo/devolución de repuestos propios. Sin campos económicos, reportes financieros, catálogo de precios, pagos ni contacto con plantillas de importes. No entrega, anula ni reabre órdenes. |
+| Solo lectura | Consulta operativa de todas las órdenes, notas y adjuntos. Sin escrituras ni campos económicos, pagos, reportes económicos o catálogo de precios. |
 
-El técnico puede trabajar sobre las órdenes abiertas del taller; no se limita la
-lectura ni el trabajo al nombre libre de «técnico asignado». Las órdenes entregadas
-o anuladas no pueden reabrirse o editarse con ese rol. Las devoluciones de piezas
-siguen permitidas en órdenes cerradas. Los campos bloqueados también se comprueban
-en la API y, para cambios de orden, dentro de la transacción/control de versión.
+La asignación usa `equipment.assigned_member_id`, estable aunque se repitan nombres.
+Administrador y recepción eligen una cuenta activa con rol Técnico. Las órdenes
+anteriores conservan su nombre de técnico y quedan **sin vincular** hasta asignarlas;
+no se intenta adivinar qué cuenta corresponde a un nombre. Guardar otros campos
+no borra el nombre anterior. Cada reasignación genera un evento de historial.
+Bloquear al técnico conserva sus órdenes; administrador o recepción puede reasignarlas.
 
-Antes de implementar en **Netlify**, configura `APP_USER_ROLES` con las cuentas de
-Identity del taller y aplica las nuevas migraciones. No copies la identidad local
-de Sites a producción. Sin configuración todos los usuarios serán de solo lectura.
-Para Sites local, usa `.dev.vars` (ignorado):
-`APP_USER_ROLES='{"seedy@sites.test":"admin"}'`.
+Los límites se comprueban en listados, métricas, detalle, historial, adjuntos y
+movimientos. Las escrituras técnicas vuelven a validar asignación dentro de su
+transacción o condición atómica. Los campos financieros se eliminan de las
+respuestas para Técnico/Lectura; no se ocultan solo mediante CSS. Los eventos de
+pago y contacto preparado también se excluyen del historial para esos roles.
+Las notas y archivos son contenido libre: no se analizan para detectar importes
+escritos manualmente; quien los añade debe considerar quién puede consultar la orden.
+
+Para Netlify, configura el administrador inicial en `APP_USER_ROLES` antes de su
+primer acceso, usando su correo de Identity, y aplica las migraciones. Ejemplo:
+`{"administrador@ejemplo.com":"admin"}`. Después, administra las cuentas desde
+la aplicación. La recuperación excepcional de un administrador bloqueado por una
+intervención directa en la base requiere al propietario de la infraestructura;
+no hay un mecanismo de elevación de permisos público.
+
+Para Sites local, `.dev.vars` conserva
+`APP_USER_ROLES='{"seedy@sites.test":"admin"}'`. Las pruebas
+`node scripts/check-staff-local.mjs` alteran **solo** el usuario/base locales para
+recorrer roles y restauran el administrador en su bloque de limpieza.
 
 ## Abonos y saldos
 
@@ -251,20 +266,15 @@ JSON es una exportación portable para revisión/restauración técnica validada
 una base vacía; no hay importación automática ni restauración sobre la base activa.
 No se ha programado una ejecución automática de respaldos.
 
-## Vista privada del cliente
+## Acceso de clientes y Odoo
 
-El detalle enlaza «Vista del cliente (privada)». `/cliente?orden=ID` exige la misma
-sesión del taller y presenta solo orden, nombre, equipo, estado, fechas, importe
-y saldo. No envía al navegador notas internas, diagnóstico libre, autor de notas,
-costos de compra ni archivos. Esta vista sirve para revisar el contenido; no es
-todavía un portal accesible por clientes externos ni un enlace secreto.
+Por decisión del usuario se retiraron la vista privada `/cliente` y su enlace.
+Los clientes accederán desde la página de compra; no se está construyendo un
+portal de clientes en esta aplicación. La integración con Odoo queda aplazada.
+No se cambió la audiencia del Site ni se enviaron mensajes a clientes.
 
-El acceso externo requerirá autenticación propia o enlaces aleatorios revocables
-con vencimiento y rutas expresamente autorizadas. No se cambió la audiencia del
-Site ni se habilitó un endpoint público por número de orden. Tampoco se enviaron
-mensajes a clientes.
-
-Pruebas de esta ronda: `node scripts/check-attachments-local.mjs` valida carga,
-descarga exacta, reintentos concurrentes, acceso privado, exportación y exclusión
-de notas internas en la vista del cliente. Deja una orden anulada con una imagen
-ficticia de un píxel en la base/almacén locales; no publica esos datos.
+Pruebas de adjuntos: `node scripts/check-attachments-local.mjs` comprueba carga,
+descarga exacta, reintentos y privacidad. El respaldo de registros incluye también
+usuarios y auditoría de permisos; siguen excluidos los archivos y las variables
+de entorno. La restauración debe conservar los IDs de usuarios para mantener las
+asignaciones de equipos.

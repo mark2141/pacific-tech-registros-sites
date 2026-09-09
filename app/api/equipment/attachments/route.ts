@@ -1,6 +1,6 @@
 import { getAuthUser } from "../../../auth";
 import { can } from "../../../../lib/permissions";
-import { getEquipment } from "@platform/equipment";
+import { getEquipment } from "../../../equipment-access";
 import { createAttachment, findAttachment, getAttachment, listAttachments } from "@platform/attachments";
 import { putFile, getFile, deleteFile } from "@platform/files";
 import { attachmentParams, attachmentType, AttachmentError, readAttachment, sameAttachment, type AttachmentRow } from "../../../../lib/attachments";
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     if (!await getAuthUser()) return json({error:"Acceso denegado."},403);
     const params = new URL(request.url).searchParams;
     if (params.has("id")) {
-      const row = await getAttachment(id(params.get("id"))); if (!row) return json({error:"No se encontró el archivo."},404);
+      const row = await getAttachment(id(params.get("id"))); if (!row||!await getEquipment(row.equipmentId)) return json({error:"No se encontró el archivo."},404);
       const bytes = await getFile(row.objectKey); if (!bytes) return json({error:"El archivo no está disponible. Contacta al administrador."},404);
       const inline = params.get("preview") === "1" && row.contentType.startsWith("image/");
       const filename = encodeURIComponent(row.filename).replace(/['()*]/g, char => `%${char.charCodeAt(0).toString(16)}`);
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     await putFile(input.objectKey,bytes.buffer);
     // A failed database response can be ambiguous. Keep that inaccessible object
     // for recovery instead of deleting bytes whose metadata may have committed.
-    const created = await createAttachment(input);
+    const created = await createAttachment(input,user);
     if (created) return json({attachment:visible(created),replayed:false},201);
     const winner = await findAttachment(input.operationId);
     if (!winner) throw new Error("No se encontró el resultado del adjunto.");

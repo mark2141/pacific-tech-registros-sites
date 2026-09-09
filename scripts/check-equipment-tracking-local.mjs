@@ -12,7 +12,9 @@ const orders = [];
 const marker = `Seguimiento ficticio ${Date.now()}`;
 try {
   for (const [assignedTechnician, entryDate] of [[marker, "2026-09-01"], [marker, "2026-09-07"], [marker + " otro", "2026-09-07"]]) {
-    const result = await request("/api/equipment", "POST", { customerName: marker, equipmentType: "Laptop", reportedIssue: "Prueba automatizada local", serialNumber: "IMEI-LOCAL-123", assignedTechnician, entryDate, estimatedExitDate: "2026-09-10", warrantyDays: 90 });
+    const account=await request("/api/users","POST",{email:`tracking-${crypto.randomUUID()}@example.test`,name:assignedTechnician,role:"tecnico",enabled:1});
+    assert.equal(account.status,201);
+    const result = await request("/api/equipment", "POST", { assignedMemberId:account.body.user.id,customerName: marker, equipmentType: "Laptop", reportedIssue: "Prueba automatizada local", serialNumber: "IMEI-LOCAL-123", assignedTechnician, entryDate, estimatedExitDate: "2026-09-10", warrantyDays: 90 });
     assert.equal(result.status, 201, JSON.stringify(result.body)); orders.push(result.body.equipment);
   }
   const first = orders[0];

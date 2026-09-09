@@ -5,9 +5,9 @@ import { registerHooks } from "node:module";
 const moduleUrl = source => `data:text/javascript,${encodeURIComponent(source)}`;
 globalThis.permissionTest = { role: "lectura", calls: 0 };
 const identity = moduleUrl('export async function getAuthUser() { return {userId:"verified",email:"verified@example.test",role:globalThis.permissionTest.role}; }');
-const repo = moduleUrl('const write=async()=>{globalThis.permissionTest.calls++;throw new Error("Forbidden write reached repository");}; export const createEquipment=write,updateEquipment=write,listEquipment=write,getEquipment=write,listEquipmentHistory=write,addEquipmentNote=write,getLastEquipmentContact=write,getInventoryItem=write,listInventory=write,createInventoryItem=write,editInventoryItem=write,listInventoryMovements=write,listOrderParts=write,moveInventory=write,listPayments=write,recordPayment=write,createAttachment=write,findAttachment=write,getAttachment=write,listAttachments=write,putFile=write,getFile=write,deleteFile=write,exportRecords=write;');
+const repo = moduleUrl('const write=async()=>{globalThis.permissionTest.calls++;throw new Error("Forbidden write reached repository");}; export const createEquipment=write,updateEquipment=write,listEquipment=write,getEquipment=write,listEquipmentHistory=write,addEquipmentNote=write,getLastEquipmentContact=write,getInventoryItem=write,listInventory=write,createInventoryItem=write,editInventoryItem=write,listInventoryMovements=write,listOrderParts=write,moveInventory=write,listPayments=write,recordPayment=write,createAttachment=write,findAttachment=write,getAttachment=write,listAttachments=write,putFile=write,getFile=write,deleteFile=write,exportRecords=write,getStaff=write;');
 registerHooks({ resolve(specifier, context, next) {
-  if (/\/app\/api\//.test(context.parentURL || "") && /(^|\/)auth$/.test(specifier)) return { url: identity, shortCircuit: true };
+  if (/\/app\//.test(context.parentURL || "") && /(^|\/)auth$/.test(specifier)) return { url: identity, shortCircuit: true };
   if (specifier.startsWith("@platform/")) return { url: repo, shortCircuit: true };
   if (specifier.startsWith(".") && !/\.[a-z]+$/.test(specifier)) { try { return next(specifier + ".ts", context); } catch { /* Let Node resolve other module types. */ } }
   return next(specifier, context);

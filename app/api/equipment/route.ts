@@ -15,6 +15,8 @@ import { orderNumberPrefix } from "../../../lib/order-number";
 import { todayInPanama } from "../../../lib/panama-date";
 import { getAuthUser } from "../../auth";
 import { can, canEditPayload } from "../../../lib/permissions";
+import { accessJson } from "../../equipment-access";
+import { getStaff } from "@platform/staff";
 import { PaymentError } from "../../../lib/payments";
 import {
   InvalidContactValueError,
@@ -32,10 +34,10 @@ function clean(value: unknown) {
 
 // Las respuestas llevan nombres, teléfonos, correos y seriales de clientes:
 // ningún intermediario debe guardarlas.
-const NO_STORE = { "Cache-Control": "private, no-store" };
+
 
 function json(body: unknown, status = 200) {
-  return Response.json(body, { status, headers: NO_STORE });
+  return accessJson(body,status);
 }
 
 // El detalle del error solo va al log del Worker: los mensajes de D1 y Drizzle
@@ -78,7 +80,7 @@ export async function GET(request: Request) {
     const query = parseEquipmentListQuery(
       new URL(request.url).searchParams,
     );
-    return json(await listEquipment(query));
+    return json(await listEquipment({...query,scopeMemberId:user.role==="tecnico"?user.memberId:undefined}));
   } catch (error) {
     if (error instanceof InvalidEquipmentQueryError) {
       return json({ error: error.message }, 400);
@@ -105,6 +107,7 @@ export async function POST(request: Request) {
     }
 
     const orderPrefix = orderNumberPrefix(today);
+    const assignment=await assignmentValues(payload);
     const insertValues = {
       customerName,
       customerPhone,
@@ -122,6 +125,7 @@ export async function POST(request: Request) {
       laborDescription: "",
       entryDate,
       notes: clean(payload.notes),
+      ...assignment,
     };
 
     const row = await createEquipment(insertValues, orderPrefix, user);
@@ -146,7 +150,8 @@ export async function PATCH(request: Request) {
     }
 
     if ("notes" in payload) throw new InvalidEquipmentPayloadError("Las notas se añaden desde el historial; las anteriores se conservan.");
-    const row = await updateEquipment(id, payload, user);
+    const assignment=await assignmentValues(payload);
+    const row = await updateEquipment(id, {...payload,...assignment}, user);
     if (!row) {
       return json({ error: "No se encontró el equipo." }, 404);
     }
@@ -160,4 +165,15 @@ export async function PATCH(request: Request) {
     if (validation) return validation;
     return routeError(error);
   }
+}
+async function assignmentValues(payload:Record<string,unknown>){
+  if(!("assignedMemberId" in payload)){
+    if("assignedTechnician" in payload)throw new InvalidEquipmentPayloadError("Selecciona una cuenta de técnico para cambiar la asignación.");
+    return {};
+  }
+  if(payload.assignedMemberId===null)return{assignedMemberId:null,assignedTechnician:"Sin asignar"};
+  if(typeof payload.assignedMemberId!=="number"||!Number.isSafeInteger(payload.assignedMemberId)||payload.assignedMemberId<1)throw new InvalidEquipmentPayloadError("Cuenta de técnico inválida.");
+  const member=await getStaff(payload.assignedMemberId);
+  if(!member||!member.enabled||member.role!=="tecnico")throw new InvalidEquipmentPayloadError("Selecciona un técnico activo.");
+  return{assignedMemberId:member.id,assignedTechnician:member.name};
 }

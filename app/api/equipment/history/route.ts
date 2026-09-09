@@ -1,13 +1,13 @@
-import { getEquipment, listEquipmentHistory, addEquipmentNote, getLastEquipmentContact } from "@platform/equipment";
+import { listEquipmentHistory, addEquipmentNote, getLastEquipmentContact } from "@platform/equipment";
+import { getEquipment,accessJson } from "../../../equipment-access";
 import { contactEventMessage } from "../../../../lib/customer-message";
 import { getAuthUser } from "../../../auth";
-import { can } from "../../../../lib/permissions";
+import { can,canSeeFinance } from "../../../../lib/permissions";
 import { InvalidEquipmentQueryError, parseEquipmentCursor } from "../../../../lib/equipment-query";
 import { InvalidEquipmentPayloadError, readEquipmentPayload } from "../../../../lib/equipment-validation";
 import { parseHistoryNote } from "../../../../lib/equipment-tracking";
 
-const headers = { "Cache-Control": "private, no-store" };
-const json = (body: unknown, status = 200) => Response.json(body, { status, headers });
+const json = accessJson;
 function failure(error: unknown) {
   if (error instanceof InvalidEquipmentQueryError || error instanceof InvalidEquipmentPayloadError) return json({ error: error.message }, 400);
   console.error("Error en el historial:", error);
@@ -36,6 +36,8 @@ export async function POST(request: Request) {
     const { id } = parseEquipmentCursor(String(payload.equipmentId));
     if (payload.kind !== undefined && payload.kind !== "nota" && payload.kind !== "contacto") throw new InvalidEquipmentPayloadError("Tipo de registro inválido.");
     const kind = payload.kind === "contacto" ? "contacto" : "nota";
+    if(kind==="contacto"&&!canSeeFinance(user.role))return json({error:"Acceso denegado."},403);
+    if(!await getEquipment(id))return json({error:"No se encontró el equipo."},404);
     const note = kind === "contacto" ? contactEventMessage(payload) : parseHistoryNote(payload.message);
     const event = await addEquipmentNote(id, note, user, kind);
     return event ? json({ event }, 201) : json({ error: "No se encontró el equipo." }, 404);
