@@ -419,3 +419,7 @@ textarea { resize: vertical; min-height: 78px; line-height: 1.4; }
 .staff-list li { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .staff-list span { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
 @media(max-width:550px){.operational-metrics{grid-template-columns:1fr;}}
+.open-orders-list { list-style:none; margin:1rem 0; padding:0; display:grid; gap:1rem; }
+.open-orders-list li { border:1px solid var(--border, #dce3ee); border-radius:12px; padding:1rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+.open-orders-list p { margin:.5rem 0; }
+@media(max-width:600px) { .open-orders-list li { align-items:stretch; flex-direction:column; } }

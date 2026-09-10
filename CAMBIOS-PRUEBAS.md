@@ -1,21 +1,26 @@
-# Primera revisión: cuatro cambios pequeños
+# Cambios para revisar
 
-## Revisión actual: administración y vistas por rol
+## Revisión actual: dos roles, órdenes abiertas y mano de obra
 
-- Administrador: abrir «Usuarios y permisos», añadir una cuenta de técnico,
-  modificar su nombre o bloquear/reactivar su acceso. El correo es su identidad;
-  añadirlo aquí no envía invitaciones ni modifica el acceso privado del Site.
-- Asignar una orden a esa cuenta desde el selector de técnico. Las órdenes viejas
-  conservan el nombre anterior hasta vincularlas; no se asignan automáticamente.
-- Técnico: «Mis órdenes» y métricas solo de su cuenta, sin importes ni pagos.
-- Solo lectura: todas las órdenes en consulta, sin información económica estructurada.
-- Administrador y recepción conservan los importes y flujos de cobro existentes.
-- Las cuentas bloqueadas no acceden al registro. No se permite bloquear al
-  administrador protegido ni cambiar el rol de la propia cuenta.
-- La vista del cliente se retiró a petición del usuario. Odoo queda para después.
+1. En «Usuarios y permisos», crear o editar una cuenta. Solo se ofrecen Administrador
+   y Técnico. Vincular el nombre Anthony, Marcos, Valentín o Xavier con su correo real.
+2. Crear un ingreso «Sin asignar» para que quede en «Órdenes abiertas». También puede
+   reservarse por nombre antes de vincular una cuenta.
+3. Con una cuenta técnica vinculada, tomar una orden. Desaparece de abiertas y aparece
+   en «Mis órdenes», en reparación. Un segundo reclamo simultáneo se rechaza.
+4. Registrar diagnóstico, trabajo y monto de mano de obra. Los costos de piezas son internos.
+5. El administrador confirma la salida y emite la factura a Pacific Tech. El documento
+   muestra «Trabajo realizado por», equipo y solo mano de obra. El técnico puede consultarlo.
+6. Los pagos nuevos se registran de Pacific Tech al técnico. Las facturas históricas
+   conservan su formato original. Se bloquea la reasignación de facturas entregadas.
+7. Los antiguos roles Recepción/Solo lectura quedan sin acceso hasta que el administrador
+   configure uno de los dos roles nuevos. No hay elevación automática de permisos.
 
-Las secciones siguientes documentan revisiones anteriores; esta sección describe
-el estado actual de roles y acceso de clientes.
+La conexión automática con Odoo Estándar no está implementada: su API externa requiere
+Personalizado. El flujo local de órdenes abiertas ya funciona. No se añadió portal de clientes.
+
+Las secciones siguientes conservan revisiones anteriores; esta sección describe el
+comportamiento actual y tiene prioridad.
 
 ## Revisión actual: archivos, copia de registros y vista del cliente
 

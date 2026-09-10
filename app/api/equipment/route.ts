@@ -16,7 +16,7 @@ import { todayInPanama } from "../../../lib/panama-date";
 import { getAuthUser } from "../../auth";
 import { can, canEditPayload } from "../../../lib/permissions";
 import { accessJson } from "../../equipment-access";
-import { getStaff } from "@platform/staff";
+import { getStaff,listTechnicians } from "@platform/staff";
 import { PaymentError } from "../../../lib/payments";
 import {
   InvalidContactValueError,
@@ -77,10 +77,15 @@ export async function GET(request: Request) {
   try {
     const user = await getAuthUser();
     if (!user) return unauthorized();
+    const available=new URL(request.url).searchParams.get("view")==="available";
+    const account=available&&user.role==="tecnico"?await getStaff(user.memberId):null;
+    if(available&&user.role==="tecnico"&&!account?.technicianName)return json({error:"El administrador debe vincular tu cuenta a un nombre de técnico."},403);
     const query = parseEquipmentListQuery(
       new URL(request.url).searchParams,
     );
-    return json(await listEquipment({...query,scopeMemberId:user.role==="tecnico"?user.memberId:undefined}));
+    const result=await listEquipment({...query,scopeMemberId:!available&&user.role==="tecnico"?user.memberId:undefined,availableFor:available?(account?.technicianName??"Sin asignar"):undefined});
+    if(available)return json({...result,summary:undefined,equipment:result.equipment.map(({id,version,orderNumber,equipmentType,brand,model,reportedIssue,entryDate,assignedTechnician})=>({id,version,orderNumber,equipmentType,brand,model,reportedIssue,entryDate,assignedTechnician}))});
+    return json(result);
   } catch (error) {
     if (error instanceof InvalidEquipmentQueryError) {
       return json({ error: error.message }, 400);
@@ -109,6 +114,7 @@ export async function POST(request: Request) {
     const orderPrefix = orderNumberPrefix(today);
     const assignment=await assignmentValues(payload);
     const insertValues = {
+      invoiceKind:"technician",
       customerName,
       customerPhone,
       customerEmail,
@@ -167,13 +173,16 @@ export async function PATCH(request: Request) {
   }
 }
 async function assignmentValues(payload:Record<string,unknown>){
-  if(!("assignedMemberId" in payload)){
-    if("assignedTechnician" in payload)throw new InvalidEquipmentPayloadError("Selecciona una cuenta de técnico para cambiar la asignación.");
-    return {};
+  if(!("assignedMemberId" in payload)&&!("assignedTechnician" in payload))return {};
+  if(payload.assignedMemberId==null){
+    const name=clean(payload.assignedTechnician)||"Sin asignar";
+    if(name==="Sin asignar")return{assignedMemberId:null,assignedTechnician:name};
+    const technician=(await listTechnicians()).find(row=>row.name===name);
+    if(!technician)throw new InvalidEquipmentPayloadError("Selecciona un nombre del desplegable de técnicos.");
+    return{assignedMemberId:technician.id,assignedTechnician:technician.name};
   }
-  if(payload.assignedMemberId===null)return{assignedMemberId:null,assignedTechnician:"Sin asignar"};
   if(typeof payload.assignedMemberId!=="number"||!Number.isSafeInteger(payload.assignedMemberId)||payload.assignedMemberId<1)throw new InvalidEquipmentPayloadError("Cuenta de técnico inválida.");
   const member=await getStaff(payload.assignedMemberId);
-  if(!member||!member.enabled||member.role!=="tecnico")throw new InvalidEquipmentPayloadError("Selecciona un técnico activo.");
-  return{assignedMemberId:member.id,assignedTechnician:member.name};
+  if(!member||!member.enabled||!["tecnico","admin"].includes(member.role)||!member.technicianName)throw new InvalidEquipmentPayloadError("Selecciona un técnico activo.");
+  return{assignedMemberId:member.id,assignedTechnician:member.technicianName};
 }

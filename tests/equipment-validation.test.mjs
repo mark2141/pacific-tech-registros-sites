@@ -4,7 +4,7 @@ import { readEquipmentPayload, validateEquipmentTextFields, InvalidEquipmentPayl
 import { parseOptionalCents, MAX_MONEY_CENTS, InvalidMoneyValueError } from "../lib/equipment-values.ts";
 import { buildEquipmentUpdate } from "../lib/equipment-update.ts";
 
-const current = { id: 1, status: "listo", exitDate: null, invoiceNumber: null, partsCostCents: 0, laborCostCents: 0, invoiceTaxCents: null, invoiceTaxRate: null };
+const current = { assignedTechnician:"Anthony",id: 1, status: "listo", exitDate: null, invoiceNumber: null, partsCostCents: 0, laborCostCents: 0, invoiceTaxCents: null, invoiceTaxRate: null };
 
 test("rechaza JSON roto, null, listas y valores escalares como registro", async () => {
   for (const body of ["{", "null", "[]", "true", '"texto"']) {
@@ -28,5 +28,5 @@ test("centavos rechazan booleanos, listas, exponentes, fracciones y desbordamien
 test("el total y el impuesto histórico tampoco pueden desbordar la base", () => {
   assert.throws(() => buildEquipmentUpdate(current, { partsCostCents: MAX_MONEY_CENTS, laborCostCents: 1 }), InvalidMoneyValueError);
   assert.throws(() => buildEquipmentUpdate({ ...current, status: "entregado", invoiceTaxRate: 0.07 }, { partsCostCents: MAX_MONEY_CENTS }), InvalidMoneyValueError);
-  assert.equal(buildEquipmentUpdate(current, { status: "entregado", partsCostCents: MAX_MONEY_CENTS }).invoiceTotalCents, MAX_MONEY_CENTS);
+  assert.equal(buildEquipmentUpdate(current, { status: "entregado", laborCostCents: MAX_MONEY_CENTS }).invoiceTotalCents, MAX_MONEY_CENTS);
 });

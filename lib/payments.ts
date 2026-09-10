@@ -2,7 +2,7 @@ import { MAX_MONEY_CENTS } from "./equipment-values.ts";
 export const paymentMethods = { efectivo: "Efectivo", transferencia: "Transferencia", tarjeta: "Tarjeta", yappy: "Yappy", otro: "Otro" } as const;
 export type PaymentInput = { operationId: string; equipmentId: number; version: number; amountCents: number; method: string; reference: string; note: string; reversalOf: number | null };
 export type PaymentRow = Omit<PaymentInput, "version"> & { id: number; actorUserId: string; actorEmail: string; createdAt: string | Date; reversed: boolean };
-export type BalanceOrder = { status: string; paidCents: number; partsCostCents: number; laborCostCents: number; invoiceTotalCents: number | null };
+export type BalanceOrder = { invoiceKind?:string; status: string; paidCents: number; partsCostCents: number; laborCostCents: number; invoiceTotalCents: number | null };
 export class PaymentError extends Error {
   status: number;
   constructor(message: string, status = 400) { super(message); this.status = status; }
@@ -22,7 +22,7 @@ export function paymentInput(payload: Record<string, unknown>): PaymentInput {
     amountCents: reversalOf ? 0 : positiveId(payload.amountCents), method: reversalOf ? "" : String(payload.method), reference, note, reversalOf };
 }
 export function balance(order: BalanceOrder) {
-  const totalCents = order.status === "anulado" ? 0 : order.status === "entregado" ? order.invoiceTotalCents ?? 0 : order.partsCostCents + order.laborCostCents;
+  const totalCents = order.status === "anulado" ? 0 : order.status === "entregado" ? order.invoiceTotalCents ?? 0 : order.invoiceKind==="technician"?order.laborCostCents:order.partsCostCents + order.laborCostCents;
   return { totalCents, paidCents: order.paidCents, dueCents: totalCents - order.paidCents,
     label: totalCents === 0 && order.paidCents === 0 ? "Sin importe" : order.paidCents === 0 ? "Pendiente" : order.paidCents < totalCents ? "Pago parcial" : "Pagado" };
 }

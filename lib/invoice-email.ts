@@ -5,6 +5,8 @@ import { formatMoney } from "./totals.ts";
 export const DEFAULT_LABOR_DESCRIPTION = "Servicio técnico / mano de obra";
 
 export type InvoiceEmailRecord = {
+  invoiceKind?:string;
+  invoiceTechnician?:string|null;
   id: number;
   orderNumber: string;
   invoiceNumber: string | null;
@@ -28,6 +30,13 @@ export function buildInvoiceEmailHref(
   record: InvoiceEmailRecord,
   business: BusinessInfo,
 ) {
+  if(record.invoiceKind==="technician"){
+    const recipient=business.email.trim();
+    if(!isValidCustomerEmail(recipient))return null;
+    const number=record.invoiceNumber||`NF-${String(record.id).padStart(7,"0")}`;
+    const body=[`Para: Pacific Tech`,`Factura de mano de obra: ${number}`,`Orden: ${record.orderNumber}`,`Equipo: ${[record.equipmentType,record.brand,record.model].filter(Boolean).join(" ")}`,`Trabajo realizado por: ${record.invoiceTechnician||"Sin especificar"}`,`Servicio: ${record.laborDescription||DEFAULT_LABOR_DESCRIPTION}`,`Mano de obra: ${formatMoney(record.invoiceTotalCents)}`].join("\n");
+    return `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(`Mano de obra ${number} · ${record.invoiceTechnician}`)}&body=${encodeURIComponent(body)}`;
+  }
   const recipient = record.customerEmail.trim();
   if (!isValidCustomerEmail(recipient)) return null;
 

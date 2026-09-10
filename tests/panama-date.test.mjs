@@ -16,6 +16,7 @@ test("una salida sin fecha explícita usa el día de Panamá", () => {
   const values = buildEquipmentUpdate(
     {
       id: 7,
+      assignedTechnician:"Anthony",
       status: "listo",
       exitDate: null,
       invoiceNumber: null,

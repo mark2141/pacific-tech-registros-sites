@@ -3,18 +3,19 @@ import assert from "node:assert/strict";
 import { can, canEditPayload, resolveRole } from "../lib/permissions.ts";
 import { paymentInput, paymentAmount, assertPaymentReplay, balance, protectPaidOrder } from "../lib/payments.ts";
 const user = { userId: "verified", email: "OWNER@example.test" };
-test("Roles: configuración confiable, inválidos y ausentes solo lectura", () => {
-  for (const config of [undefined, "{", "[]", '{"owner@example.test":"root"}']) assert.equal(resolveRole(user, config), "lectura");
+test("Roles: configuración confiable, inválidos y ausentes sin activación automática", () => {
+  for (const config of [undefined, "{", "[]", '{"owner@example.test":"root"}']) assert.equal(resolveRole(user, config), null);
   assert.equal(resolveRole(user, '{"owner@example.test":"admin"}'), "admin");
   assert.equal(resolveRole(user, '{"verified":"tecnico","owner@example.test":"admin"}'), "tecnico");
-  assert.equal(resolveRole({ userId: "constructor", email: "toString" }, '{}'), "lectura");
+  assert.equal(resolveRole({ userId: "constructor", email: "toString" }, '{}'), null);
   for (const permission of ["receive", "edit", "charge", "reverse", "stock", "consume", "note"]) assert.equal(can("lectura", permission), false);
-  assert.equal(can("recepcion", "charge"), true); assert.equal(can("recepcion", "reverse"), false);
+  assert.equal(can("recepcion", "charge"), false); assert.equal(can("recepcion", "reverse"), false);
   assert.equal(can("tecnico", "stock"), false); assert.equal(can("tecnico", "consume"), true);
 });
-test("Técnico: permite trabajo, rechaza importes, entrega y reapertura", () => {
+test("Técnico: permite mano de obra propia, rechaza costos de piezas, entrega y reapertura", () => {
   assert.equal(canEditPayload("tecnico", { id: 1, version: 1, diagnosis: "Listo", status: "listo" }, "reparacion"), true);
-  for (const payload of [{ status: "entregado" }, { status: "anulado" }, { laborCostCents: 0 }, { paidCents: 0 }, { assignedTechnician: "otro" }]) assert.equal(canEditPayload("tecnico", payload, "ingreso"), false);
+  assert.equal(canEditPayload("tecnico",{laborCostCents:2500},"reparacion"),true);
+  for (const payload of [{ status: "entregado" }, { status: "anulado" }, { partsCostCents: 0 }, { paidCents: 0 }, { assignedTechnician: "otro" }]) assert.equal(canEditPayload("tecnico", payload, "ingreso"), false);
   assert.equal(canEditPayload("tecnico", { status: "ingreso" }, "entregado"), false);
 });
 const order = { status: "ingreso", partsCostCents: 700, laborCostCents: 300, invoiceTotalCents: null, paidCents: 400 };

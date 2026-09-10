@@ -18,6 +18,8 @@ export const equipment = pgTable(
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     orderNumber: text("order_number").notNull().unique(),
     invoiceNumber: text("invoice_number").unique(),
+    invoiceKind: text("invoice_kind").notNull().default("customer"),
+    invoiceTechnician: text("invoice_technician"),
     customerName: text("customer_name").notNull(),
     customerPhone: text("customer_phone").notNull().default(""),
     customerEmail: text("customer_email").notNull().default(""),
@@ -67,6 +69,7 @@ export const equipment = pgTable(
     index("idx_equipment_updated_at_id").on(table.updatedAt, table.id),
     // Los agregados del listado agrupan por estado y suman por mes de salida.
     index("idx_equipment_status").on(table.status),
+    index("idx_equipment_member_status").on(table.assignedMemberId, table.status),
     index("idx_equipment_exit_date").on(table.exitDate),
     index("idx_equipment_status_entry_date").on(table.status, table.entryDate),
     index("idx_equipment_technician_entry").on(table.assignedTechnician, table.entryDate),
@@ -151,6 +154,7 @@ export const attachments = pgTable("attachments", {
 export const staff = pgTable("staff", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   email: text("email").notNull().unique(),
+  technicianName: text("technician_name").unique(),
   name: text("name").notNull(),
   role: text("role").notNull(),
   enabled: integer("enabled").notNull().default(1),

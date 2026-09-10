@@ -3,6 +3,7 @@ import { formatMoney } from "./totals.ts";
 type OrderForConfirmation = {
   orderNumber: string;
   status: string;
+  invoiceKind?:string;
   partsCostCents: number;
   laborCostCents: number;
 };
@@ -13,8 +14,8 @@ export function equipmentChangeConfirmation(current: OrderForConfirmation, value
   const parts = typeof values.partsCostCents === "number" ? values.partsCostCents : current.partsCostCents;
   const labor = typeof values.laborCostCents === "number" ? values.laborCostCents : current.laborCostCents;
   if (status === "entregado" && current.status !== "entregado") {
-    return `La orden ${current.orderNumber} se marcará como entregada y se generará una factura por ${formatMoney(parts + labor)}. ¿Deseas continuar?` +
-      (parts + labor === 0 ? "\n\nEsta orden no tiene costos registrados; la factura será por $0.00." : "");
+    return `La orden ${current.orderNumber} se marcará como entregada y se generará una factura del técnico a Pacific Tech, por mano de obra de ${formatMoney(labor)}. ¿Deseas continuar?` +
+      (labor === 0 ? "\n\nEsta orden no tiene mano de obra registrada; la factura será por $0.00." : "");
   }
   if (status === "anulado" && current.status !== "anulado") {
     return `La orden ${current.orderNumber} quedará anulada. Su número se conserva.` +

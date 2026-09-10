@@ -20,7 +20,7 @@ for (const raw of ["{", "null", "[]"]) {
 const longName = await request("/api/equipment", "POST", { customerName: "a".repeat(121), equipmentType: "Laptop", reportedIssue: "Prueba" });
 assert.equal(longName.status, 400);
 const marker = `Prueba local ${Date.now()} %_`;
-const created = await request("/api/equipment", "POST", { customerName: marker, customerPhone: "60000000", equipmentType: "Laptop", reportedIssue: "Comprobación de adaptación; datos ficticios" });
+const created = await request("/api/equipment", "POST", { assignedTechnician:"Anthony",customerName: marker, customerPhone: "60000000", equipmentType: "Laptop", reportedIssue: "Comprobación de adaptación; datos ficticios" });
 assert.equal(created.status, 201, JSON.stringify(created.body));
 const { id, orderNumber } = created.body.equipment;
 assert.match(orderNumber, /^OT-\d{6}-\d{3,}$/);
@@ -31,10 +31,10 @@ assert.match(search.headers.get("cache-control"), /no-store/);
 const edited = await request("/api/equipment", "PATCH", { id, version: created.body.equipment.version, diagnosis: "Equipo de prueba revisado", status: "listo", partsCostCents: 1999, laborCostCents: 5000 });
 assert.equal(edited.status, 200, JSON.stringify(edited.body));
 const delivered = await request("/api/equipment", "PATCH", { id, version: edited.body.equipment.version, status: "entregado" });
-assert.equal(delivered.body.equipment.invoiceTotalCents, 6999);
+assert.equal(delivered.body.equipment.invoiceTotalCents, 5000);
 assert.ok(delivered.body.equipment.invoiceNumber);
 const corrected = await request("/api/equipment", "PATCH", { id, version: delivered.body.equipment.version, laborCostCents: 6000 });
-assert.equal(corrected.body.equipment.invoiceTotalCents, 7999);
+assert.equal(corrected.body.equipment.invoiceTotalCents, 6000);
 const invalid = await request("/api/equipment", "PATCH", { id, version: corrected.body.equipment.version, customerPhone: "abc" });
 assert.equal(invalid.status, 400);
 for (const values of [{ laborCostCents: true }, { laborCostCents: 2147483648 }, { notes: "a".repeat(2001) }, { id: [id], status: "anulado" }]) {
@@ -42,7 +42,7 @@ for (const values of [{ laborCostCents: true }, { laborCostCents: 2147483648 }, 
   assert.equal(rejected.status, 400);
 }
 const unchanged = await request(`/api/equipment?search=${encodeURIComponent(marker)}`);
-assert.equal(unchanged.body.equipment[0].invoiceTotalCents, 7999, "Rechazar una edición debe conservar la factura");
+assert.equal(unchanged.body.equipment[0].invoiceTotalCents, 6000, "Rechazar una edición debe conservar la factura");
 const catalog = await fetch(`${origin}/precios/`, { headers: { Cookie: cookie } });
 assert.equal(catalog.status, 200);
 assert.match(catalog.headers.get("cache-control"), /no-store/);

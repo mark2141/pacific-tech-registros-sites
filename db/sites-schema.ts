@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const equipment = sqliteTable(
   "equipment",
@@ -7,6 +8,8 @@ export const equipment = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     orderNumber: text("order_number").notNull().unique(),
     invoiceNumber: text("invoice_number").unique(),
+    invoiceKind: text("invoice_kind").notNull().default("customer"),
+    invoiceTechnician: text("invoice_technician"),
     customerName: text("customer_name").notNull(),
     customerPhone: text("customer_phone").notNull().default(""),
     customerEmail: text("customer_email").notNull().default(""),
@@ -42,6 +45,7 @@ export const equipment = sqliteTable(
   (table) => [
     index("idx_equipment_updated_at_id").on(table.updatedAt, table.id),
     index("idx_equipment_status").on(table.status),
+    index("idx_equipment_member_status").on(table.assignedMemberId, table.status),
     index("idx_equipment_exit_date").on(table.exitDate),
     index("idx_equipment_status_entry_date").on(table.status, table.entryDate),
     index("idx_equipment_technician_entry").on(table.assignedTechnician, table.entryDate),
@@ -126,12 +130,13 @@ export const attachments = sqliteTable("attachments", {
 export const staff = sqliteTable("staff", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   email: text("email").notNull().unique(),
+  technicianName: text("technician_name"),
   name: text("name").notNull(),
   role: text("role").notNull(),
   enabled: integer("enabled").notNull().default(1),
   protected: integer("protected").notNull().default(0),
   version: integer("version").notNull().default(1),
-});
+}, table=>[uniqueIndex("idx_staff_technician_name").on(table.technicianName)]);
 export const staffAudit = sqliteTable("staff_audit", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   staffId: integer("staff_id").notNull().references(()=>staff.id),

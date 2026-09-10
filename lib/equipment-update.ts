@@ -1,5 +1,5 @@
 import { parseWarrantyDays, parseEstimatedExitDate } from "./equipment-tracking.ts";
-import { validateEquipmentTextFields } from "./equipment-validation.ts";
+import { validateEquipmentTextFields, InvalidEquipmentPayloadError } from "./equipment-validation.ts";
 import { calculateTotals } from "./totals.ts";
 import {
   isValidIsoDate,
@@ -33,6 +33,9 @@ export type CurrentEquipmentRow = {
   status: string;
   exitDate: string | null;
   invoiceNumber: string | null;
+  invoiceKind?: string;
+  invoiceTechnician?: string | null;
+  assignedTechnician?: string;
   partsCostCents: number;
   laborCostCents: number;
   invoiceTaxCents: number | null;
@@ -89,6 +92,7 @@ export function buildEquipmentUpdate(
   payload: Record<string, unknown>,
 ) {
   validateEquipmentTextFields(payload);
+  if(current.status==="entregado"&&"assignedTechnician" in payload&&payload.assignedTechnician!==current.assignedTechnician)throw new InvalidEquipmentPayloadError("Reabre la orden antes de cambiar el técnico de una factura.");
   const status = clean(payload.status);
   if (status && !allowedStatuses.has(status)) {
     throw new InvalidEquipmentStatusError(status);
@@ -204,6 +208,7 @@ export function buildEquipmentUpdate(
     values.invoiceTaxCents = null;
     values.invoiceTotalCents = null;
     values.invoiceTaxRate = null;
+    values.invoiceTechnician = null;
   }
 
   const issuingInvoice =
@@ -213,15 +218,22 @@ export function buildEquipmentUpdate(
     finalStatus === "entregado" &&
     costsChanged;
 
+  const technicianInvoice=issuingInvoice||current.invoiceKind==="technician";
+  if(issuingInvoice){
+    const technician=clean(payload.assignedTechnician)||current.assignedTechnician;
+    if(!technician||technician==="Sin asignar")throw new RequiredEquipmentFieldError("El técnico que realizó el trabajo");
+    values.invoiceKind="technician";
+    values.invoiceTechnician=technician;
+  }
   if (issuingInvoice || correctingDeliveredCosts) {
     const totals = calculateTotals(
-      partsCostCents ?? current.partsCostCents ?? 0,
+      technicianInvoice?0:partsCostCents ?? current.partsCostCents ?? 0,
       laborCostCents ?? current.laborCostCents ?? 0,
     );
     if (totals.totalCents > MAX_MONEY_CENTS) throw new InvalidMoneyValueError("total");
     values.invoiceSubtotalCents = totals.subtotalCents;
 
-    if (issuingInvoice) {
+    if (technicianInvoice) {
       // Nulo, no cero: distingue una factura nueva emitida sin impuesto de una
       // a la que se le aplicó un 0 %. Las facturas históricas conservan su
       // política fiscal mediante las ramas siguientes.

@@ -7,5 +7,5 @@ export async function getAuthUser() {
   const user = await getIdentity();
   if(!user)return null;
   const account=await ensureStaff(user.email.toLowerCase(),resolveRole(user,getEnv().APP_USER_ROLES));
-  return account.enabled?{...user,role:account.role,memberId:account.id}:null;
+  return account.enabled&&(account.role==="admin"||account.role==="tecnico")?{...user,role:account.role,memberId:account.id}:null;
 }

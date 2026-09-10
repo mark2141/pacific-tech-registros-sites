@@ -9,6 +9,8 @@ import {
   lte,
   asc,
   ilike,
+  isNull,
+  inArray,
   like,
   lt,
   ne,
@@ -18,7 +20,7 @@ import {
 import { getDb } from "../../db";
 import { protectPaidOrder, PaymentError } from "../../lib/payments";
 import { canAccessOrder, canEditPayload } from "../../lib/permissions";
-import { equipment, equipmentHistory } from "../../db/schema";
+import { equipment, equipmentHistory, staff } from "../../db/schema";
 import { isUniqueConstraintError } from "../../lib/database-error";
 import { buildEquipmentUpdate } from "../../lib/equipment-update";
 import { monthlyOrderNumber } from "./order-number";
@@ -26,7 +28,7 @@ import { todayInPanama } from "../../lib/panama-date";
 import { escapeLikePattern, serializeEquipmentCursor } from "../../lib/equipment-query";
 import type { EquipmentActor, EquipmentListQuery, NewEquipmentInput } from "../../lib/equipment-repository";
 
-export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo, scopeMemberId }: EquipmentListQuery) {
+export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo, scopeMemberId, availableFor }: EquipmentListQuery) {
     const db = getDb();
 
     // La búsqueda se ejecuta sobre toda la tabla, no solo sobre los cien
@@ -52,7 +54,7 @@ export async function listEquipment({ search, status, limit, offset, cursor, tec
       status === "todos"
         ? ne(equipment.status, "anulado")
         : eq(equipment.status, status);
-    const scopeCondition=scopeMemberId?eq(equipment.assignedMemberId,scopeMemberId):undefined;
+    const scopeCondition=availableFor?and(isNull(equipment.assignedMemberId),inArray(equipment.assignedTechnician,["Sin asignar",availableFor]),inArray(equipment.status,["ingreso","diagnostico","reparacion"])):scopeMemberId?eq(equipment.assignedMemberId,scopeMemberId):undefined;
     const listCondition = and(statusCondition, searchCondition,scopeCondition,
       technician ? eq(equipment.assignedTechnician, technician) : undefined,
       entryFrom ? gte(equipment.entryDate, entryFrom) : undefined,
@@ -125,6 +127,20 @@ export async function listEquipment({ search, status, limit, offset, cursor, tec
     };
 }
 
+
+export async function claimEquipment(id:number,version:number,actor:EquipmentActor,name:string){
+  return getDb().transaction(async tx=>{
+    const [account]=await tx.select().from(staff).where(eq(staff.id,actor.memberId??-1)).for("update");
+    if(!account||!account.enabled||account.role!=="tecnico"||account.technicianName!==name)throw new EquipmentConflictError();
+    const [row]=await tx.update(equipment).set({assignedMemberId:account.id,assignedTechnician:name,status:"reparacion",version:version+1,updatedAt:new Date()})
+      .where(and(eq(equipment.id,id),eq(equipment.version,version),isNull(equipment.assignedMemberId),
+        inArray(equipment.assignedTechnician,["Sin asignar",name]),inArray(equipment.status,["ingreso","diagnostico","reparacion"]))).returning();
+    if(!row)throw new EquipmentConflictError();
+    await tx.insert(equipmentHistory).values({equipmentId:id,kind:"asignacion",message:`Orden tomada por: ${name} · En reparación`,toStatus:"reparacion",actorUserId:actor.userId,actorEmail:actor.email});
+    return row;
+  });
+}
+
 export async function createEquipment(values: NewEquipmentInput, prefix: string, actor: EquipmentActor) {
   const db = getDb();
   let lastUniqueError: unknown;
@@ -167,7 +183,7 @@ export async function updateEquipment(id: number, payload: Record<string, unknow
       await tx.insert(equipmentHistory).values({ equipmentId: id, kind: "estado",
         fromStatus: current.status, toStatus: updated.status, actorUserId: actor.userId, actorEmail: actor.email });
     }
-    if("assignedMemberId" in values&&values.assignedMemberId!==current.assignedMemberId)await tx.insert(equipmentHistory).values({equipmentId:id,kind:"asignacion",message:`Asignación: ${current.assignedTechnician} → ${updated.assignedTechnician}`,actorUserId:actor.userId,actorEmail:actor.email});
+    if(("assignedMemberId" in values&&values.assignedMemberId!==current.assignedMemberId)||("assignedTechnician" in values&&values.assignedTechnician!==current.assignedTechnician))await tx.insert(equipmentHistory).values({equipmentId:id,kind:"asignacion",message:`Asignación: ${current.assignedTechnician} → ${updated.assignedTechnician}`,actorUserId:actor.userId,actorEmail:actor.email});
     return updated;
   });
 }

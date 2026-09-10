@@ -143,55 +143,61 @@ incluye sólo código y migraciones; no lleva esos datos al Site o a Netlify.
 
 ## Roles, usuarios y asignaciones
 
-«Usuarios y permisos» permite a Administrador añadir cuentas por correo, cambiar
-nombre/rol y bloquear o reactivar accesos. No envía invitaciones, crea contraseñas
-ni cambia el acceso del proveedor (Sites privado o Netlify Identity). Los cambios
-se aplican en las siguientes solicitudes; la interfaz ya abierta se actualiza al
-recargar. Los datos ya vistos no pueden retirarse de un navegador remoto.
+Solo hay dos roles: **Administrador** y **Técnico**. El administrador gestiona ingresos,
+asignaciones, usuarios, inventario, salidas, facturas, pagos y respaldos. El técnico
+consulta sus órdenes, registra diagnóstico, trabajo, notas, adjuntos, repuestos y
+el monto de su mano de obra; puede consultar e imprimir sus facturas a Pacific Tech.
+La salida y la emisión definitiva siguen a cargo del administrador.
 
-Las tablas `staff` y `staff_audit` guardan roles, estado, versión y auditoría de
-cambios. El correo verificado identifica la cuenta; no se puede cambiar desde la
-interfaz. `APP_USER_ROLES` **solo inicializa una cuenta que aún no existe** cuando
-inicia sesión; posteriormente prevalece el rol de la base. Usuarios sin asignación
-inicial reciben solo lectura. Los administradores inicializados desde esa variable
-quedan protegidos: no pueden desactivarse ni cambiarse de rol desde la aplicación.
-Tampoco se permite cambiar el propio rol o bloquear la propia cuenta. Las cuentas
-no se borran. Esto conserva al menos el administrador protegido inicial incluso
-ante cambios simultáneos entre otros administradores.
+«Órdenes abiertas» muestra trabajos sin cuenta asignada, en ingreso, diagnóstico
+o reparación. Cada técnico puede tomar los libres o los reservados a su nombre.
+Una actualización condicional por versión asigna su cuenta y marca «En reparación»;
+dos reclamos simultáneos tienen un único ganador. El servidor decide quién reclama,
+sin aceptar el técnico enviado por el navegador. Antes de tomar una orden solo se
+expone su ficha de trabajo, no contactos del cliente, pagos ni adjuntos.
+«Mis órdenes», sus filtros y contadores usan el identificador de cuenta.
 
-| Rol | Vista y permisos |
-| --- | --- |
-| Administrador | Todas las órdenes, información económica, inventario, cobros, anulaciones de pago, copias y gestión de usuarios. |
-| Recepción | Todas las órdenes, datos de clientes, importes, entregas, inventario y cobros. No gestiona usuarios, descarga copias generales ni anula pagos. |
-| Técnico | «Mis órdenes»: únicamente las asignadas a su cuenta, incluidos contadores y búsqueda. Trabajo, notas, adjuntos y consumo/devolución de repuestos propios. Sin campos económicos, reportes financieros, catálogo de precios, pagos ni contacto con plantillas de importes. No entrega, anula ni reabre órdenes. |
-| Solo lectura | Consulta operativa de todas las órdenes, notas y adjuntos. Sin escrituras ni campos económicos, pagos, reportes económicos o catálogo de precios. |
+El desplegable ofrece **Anthony, Marcos, Valentín y Xavier**. No se inventan correos.
+El administrador vincula cada nombre a una cuenta real en «Usuarios y permisos».
+El vínculo es único incluso si la cuenta está bloqueada; se libera quitándolo
+explícitamente. Puede reservarse una orden por nombre antes de vincular la cuenta;
+luego ese técnico puede tomarla. Si ya existe una cuenta activa vinculada, el
+administrador puede asignársela directamente. Las asignaciones históricas conservan
+sus nombres. Cada cambio de asignación se registra en el historial.
 
-La asignación usa `equipment.assigned_member_id`, estable aunque se repitan nombres.
-Administrador y recepción eligen una cuenta activa con rol Técnico. Las órdenes
-anteriores conservan su nombre de técnico y quedan **sin vincular** hasta asignarlas;
-no se intenta adivinar qué cuenta corresponde a un nombre. Guardar otros campos
-no borra el nombre anterior. Cada reasignación genera un evento de historial.
-Bloquear al técnico conserva sus órdenes; administrador o recepción puede reasignarlas.
+Las cuentas antiguas Recepción/Solo lectura se muestran como técnicos bloqueados
+hasta que el administrador decida su nuevo acceso; no se convierten en administradores.
+Las cuentas existentes de técnicos conservan sus órdenes, y necesitan vincular un
+nombre para tomar trabajos nuevos. Las cuentas desconocidas quedan bloqueadas.
+`APP_USER_ROLES` solo inicializa cuentas ausentes; un administrador inicial queda
+protegido. No se permite desactivar ni cambiar el propio rol o el del administrador
+protegido. El correo verificado identifica la cuenta y no se edita. La gestión no
+envía invitaciones, crea contraseñas ni modifica el acceso privado de Sites/Identity.
 
-Los límites se comprueban en listados, métricas, detalle, historial, adjuntos y
-movimientos. Las escrituras técnicas vuelven a validar asignación dentro de su
-transacción o condición atómica. Los campos financieros se eliminan de las
-respuestas para Técnico/Lectura; no se ocultan solo mediante CSS. Los eventos de
-pago y contacto preparado también se excluyen del historial para esos roles.
-Las notas y archivos son contenido libre: no se analizan para detectar importes
-escritos manualmente; quien los añade debe considerar quién puede consultar la orden.
+El técnico recibe la mano de obra propia y el total de sus facturas de mano de obra,
+pero no costos de compra/piezas, reportes generales, facturas históricas a clientes
+ni pagos. Los límites se aplican en servidor, incluidas las descargas de adjuntos.
+Notas y archivos son contenido libre; no se clasifican los importes escritos manualmente.
+Los cambios de permisos se aplican en solicitudes nuevas; una página abierta se recarga.
 
-Para Netlify, configura el administrador inicial en `APP_USER_ROLES` antes de su
-primer acceso, usando su correo de Identity, y aplica las migraciones. Ejemplo:
-`{"administrador@ejemplo.com":"admin"}`. Después, administra las cuentas desde
-la aplicación. La recuperación excepcional de un administrador bloqueado por una
-intervención directa en la base requiere al propietario de la infraestructura;
-no hay un mecanismo de elevación de permisos público.
+La prueba `node scripts/check-staff-local.mjs` usa exclusivamente el sitio/base locales
+y restaura el administrador al terminar.
 
-Para Sites local, `.dev.vars` conserva
-`APP_USER_ROLES='{"seedy@sites.test":"admin"}'`. Las pruebas
-`node scripts/check-staff-local.mjs` alteran **solo** el usuario/base locales para
-recorrer roles y restauran el administrador en su bloque de limpieza.
+## Facturación de técnicos a Pacific Tech
+
+Las nuevas órdenes tienen `invoice_kind=technician`. Al confirmar la salida se
+guarda el nombre que realizó el trabajo en `invoice_technician` y se factura solo
+`labor_cost_cents`. El PDF y correo preparado muestran «Trabajo realizado por»,
+equipo, orden, servicio y total; el destinatario es Pacific Tech. El correo utiliza
+el correo empresarial configurado, nunca el correo del cliente de esa reparación.
+No se envía automáticamente.
+
+Las facturas ya emitidas conservan su formato e impuestos históricos mediante
+`invoice_kind=customer`, valor predeterminado de la migración. Una orden antigua
+abierta emite su siguiente factura bajo el formato nuevo. Los pagos existentes se
+respetan: si superan la nueva mano de obra hay que corregirlos antes de emitir.
+No se reasigna una factura entregada; primero se reabre la orden. El nombre de una
+factura no cambia al editar el perfil del técnico.
 
 ## Abonos y saldos
 
@@ -200,7 +206,7 @@ transferencia, tarjeta, Yappy y otro, con concepto y referencia opcional. Antes 
 la entrega se cobra sobre el importe estimado **guardado**; después, sobre el total
 de la factura, conservando los impuestos históricos. No se permite cobrar de más,
 cobrar órdenes anuladas ni registrar importes negativos/fraccionarios en centavos.
-No procesa cargos bancarios: registra cobros realizados por el taller.
+No procesa cargos bancarios. En órdenes nuevas registra pagos de Pacific Tech al técnico por su mano de obra; las órdenes históricas conservan sus cobros anteriores.
 
 Cada pago tiene identificador de reintento, fecha del servidor y autor. Administrador
 puede anular íntegramente un pago con motivo; se crea un asiento negativo vinculado
@@ -223,8 +229,7 @@ administrador). Las órdenes de prueba se dejan anuladas y sus abonos revertidos
 ## Fotos y adjuntos
 
 «Fotos y adjuntos» en una orden permite subir JPG, PNG, WebP y PDF de hasta 3 MB
-con etapa (ingreso, reparación, entrega) y descripción. Administrador, recepción
-y técnico pueden subir; lectura puede consultar. Se validan tamaño durante la
+con etapa (ingreso, reparación, entrega) y descripción. El administrador puede subir y consultar; el técnico lo hace en sus propias órdenes. Se validan tamaño durante la
 lectura del cuerpo y firma del tipo; SVG/HTML no están admitidos. PDF se descarga,
 las imágenes tienen vista previa privada y descarga. No es un servicio de análisis
 antivirus ni de conversión de imágenes.
@@ -270,7 +275,17 @@ No se ha programado una ejecución automática de respaldos.
 
 Por decisión del usuario se retiraron la vista privada `/cliente` y su enlace.
 Los clientes accederán desde la página de compra; no se está construyendo un
-portal de clientes en esta aplicación. La integración con Odoo queda aplazada.
+portal de clientes en esta aplicación. Odoo Estándar no incluye la API externa:
+https://www.odoo.com/documentation/19.0/developer/reference/external_rpc_api.html
+Una integración automática requeriría Personalizado y un enlace servidor a servidor
+con una cuenta de integración restringida. Recepción registraría órdenes en Reparaciones
+(`repair.order`); esta aplicación importaría su referencia única como órdenes abiertas,
+y los técnicos las tomarían aquí. El identificador externo evitaría duplicados.
+No se ha conectado ninguna cuenta ni sincronizado datos con Odoo.
+
+Como alternativa sin cambiar de plan, Odoo puede exportar CSV/XLSX. Habría que añadir
+un importador validado a esta aplicación; todavía no existe ese flujo de importación.
+https://www.odoo.com/documentation/19.0/applications/essentials/export_import_data.html
 No se cambió la audiencia del Site ni se enviaron mensajes a clientes.
 
 Pruebas de adjuntos: `node scripts/check-attachments-local.mjs` comprueba carga,

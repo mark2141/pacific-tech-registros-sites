@@ -11,7 +11,7 @@ import { canAccessOrder, canEditPayload } from "../../lib/permissions";
 
 // Only these application-owned column names enter SQL. Values are always bound.
 const columns = {
-  id: "id", orderNumber: "order_number", invoiceNumber: "invoice_number",
+  id: "id", orderNumber: "order_number", invoiceNumber: "invoice_number", invoiceKind:"invoice_kind", invoiceTechnician:"invoice_technician",
   customerName: "customer_name", customerPhone: "customer_phone", customerEmail: "customer_email",
   equipmentType: "equipment_type", assignedTechnician: "assigned_technician", assignedMemberId: "assigned_member_id",
   brand: "brand", model: "model", serialNumber: "serial_number", accessories: "accessories",
@@ -31,7 +31,7 @@ function rowFrom(raw: RawRow): EquipmentRow {
   return { ...raw, createdAt: new Date(raw.createdAt), updatedAt: new Date(raw.updatedAt) };
 }
 
-export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo, scopeMemberId }: EquipmentListQuery) {
+export async function listEquipment({ search, status, limit, offset, cursor, technician, entryFrom, entryTo, scopeMemberId, availableFor }: EquipmentListQuery) {
   const db = getSitesDb();
   const conditions = [status === "todos" ? "status != ?" : "status = ?"];
   const values: (string | number)[] = [status === "todos" ? "anulado" : status];
@@ -43,17 +43,20 @@ export async function listEquipment({ search, status, limit, offset, cursor, tec
   if (technician) { conditions.push("assigned_technician = ?"); values.push(technician); }
   if (entryFrom) { conditions.push("entry_date >= ?"); values.push(entryFrom); }
   if (entryTo) { conditions.push("entry_date <= ?"); values.push(entryTo); }
+  if(availableFor){conditions.push("assigned_member_id IS NULL AND assigned_technician IN (\x27Sin asignar\x27, ?) AND status IN (\x27ingreso\x27,\x27diagnostico\x27,\x27reparacion\x27)");values.push(availableFor);}
   if(scopeMemberId){conditions.push("assigned_member_id = ?");values.push(scopeMemberId);}
   const where = conditions.join(" AND ");
   const pageWhere = cursor ? `${where} AND id < ?` : where;
   const pageValues = cursor ? [...values, cursor.id] : [...values];
+  const scopeWhere=availableFor?"WHERE assigned_member_id IS NULL AND assigned_technician IN (\x27Sin asignar\x27, ?) AND status IN (\x27ingreso\x27,\x27diagnostico\x27,\x27reparacion\x27)":scopeMemberId?"WHERE assigned_member_id=?":"";
+  const scopeValues=availableFor?[availableFor]:scopeMemberId?[scopeMemberId]:[];
   const monthPrefix = `${todayInPanama().slice(0, 7)}%`;
   const results = await db.batch([
     db.prepare(`SELECT ${selection} FROM equipment WHERE ${pageWhere} ORDER BY id DESC LIMIT ? OFFSET ?`).bind(...pageValues, limit + 1, offset),
     db.prepare(`SELECT COUNT(*) AS total FROM equipment WHERE ${where}`).bind(...values),
-    db.prepare(`SELECT status, COUNT(*) AS count FROM equipment ${scopeMemberId?"WHERE assigned_member_id=?":""} GROUP BY status`).bind(...(scopeMemberId?[scopeMemberId]:[])),
+    db.prepare(`SELECT status, COUNT(*) AS count FROM equipment ${scopeWhere} GROUP BY status`).bind(...scopeValues),
     db.prepare("SELECT COALESCE(SUM(invoice_total_cents), 0) AS revenue FROM equipment WHERE exit_date LIKE ?").bind(monthPrefix),
-    db.prepare(`SELECT DISTINCT assigned_technician AS name FROM equipment ${scopeMemberId?"WHERE assigned_member_id=?":""} ORDER BY assigned_technician`).bind(...(scopeMemberId?[scopeMemberId]:[])),
+    db.prepare(`SELECT DISTINCT assigned_technician AS name FROM equipment ${scopeWhere} ORDER BY assigned_technician`).bind(...scopeValues),
   ]);
   const page = results[0].results as RawRow[];
   const hasMore = page.length > limit;
@@ -71,6 +74,23 @@ export async function listEquipment({ search, status, limit, offset, cursor, tec
       monthRevenueCents: Number((results[3].results[0] as { revenue: number } | undefined)?.revenue ?? 0),
     },
   };
+}
+
+
+export async function claimEquipment(id:number,version:number,actor:EquipmentActor,name:string){
+  const db=getSitesDb();
+  const results=await db.batch([
+    db.prepare(`UPDATE equipment SET assigned_member_id=?,assigned_technician=?,status='reparacion',version=version+1,updated_at=?
+      WHERE id=? AND version=? AND assigned_member_id IS NULL AND assigned_technician IN ('Sin asignar',?)
+      AND status IN ('ingreso','diagnostico','reparacion')
+      AND EXISTS(SELECT 1 FROM staff WHERE id=? AND enabled=1 AND role='tecnico' AND technician_name=?)
+      RETURNING ${selection}`).bind(actor.memberId??-1,name,new Date().toISOString(),id,version,name,actor.memberId??-1,name),
+    db.prepare(`INSERT INTO equipment_history(equipment_id,kind,message,to_status,actor_user_id,actor_email,created_at)
+      SELECT ?,'asignacion',?,'reparacion',?,?,? WHERE changes()=1`).bind(id,`Orden tomada por: ${name} · En reparación`,actor.userId,actor.email,new Date().toISOString())
+  ]);
+  const raw=results[0].results[0] as RawRow|undefined;
+  if(!raw)throw new EquipmentConflictError();
+  return rowFrom(raw);
 }
 
 const historySelection = `id, equipment_id AS "equipmentId", kind, message, from_status AS "fromStatus",
@@ -131,7 +151,7 @@ export async function updateEquipment(id: number, payload: Record<string, unknow
       SELECT ?, 'estado', ?, ?, ?, ?, ? WHERE changes() = 1`)
       .bind(id, current.status, newStatus, actor.userId, actor.email, new Date().toISOString()));
   }
-  if("assignedMemberId" in values&&values.assignedMemberId!==current.assignedMemberId)statements.push(db.prepare(`INSERT INTO equipment_history(equipment_id,kind,message,actor_user_id,actor_email,created_at) SELECT ?,\x27asignacion\x27,?,?,?,? WHERE changes()=1`).bind(id,`Asignación: ${current.assignedTechnician} → ${values.assignedTechnician}`,actor.userId,actor.email,new Date().toISOString()));
+  if(("assignedMemberId" in values&&values.assignedMemberId!==current.assignedMemberId)||("assignedTechnician" in values&&values.assignedTechnician!==current.assignedTechnician))statements.push(db.prepare(`INSERT INTO equipment_history(equipment_id,kind,message,actor_user_id,actor_email,created_at) SELECT ?,\x27asignacion\x27,?,?,?,? WHERE changes()=1`).bind(id,`Asignación: ${current.assignedTechnician} → ${values.assignedTechnician}`,actor.userId,actor.email,new Date().toISOString()));
   const results = await db.batch(statements);
   const raw = results[0].results[0] as RawRow | undefined;
   if (!raw) throw new EquipmentConflictError();

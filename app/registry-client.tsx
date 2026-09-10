@@ -12,7 +12,6 @@ import {
   useState,
 } from "react";
 import {
-  calculateTotals,
   centsToDollarInput,
   dollarsToCents,
   formatDate,
@@ -44,6 +43,8 @@ import { OrderInventory } from "./order-inventory";
 import { OrderPayments } from "./order-payments";
 import { OrderAttachments } from "./order-attachments";
 import { BackupDownload } from "./backup-download";
+import { OpenOrders } from "./open-orders";
+import { TECHNICIANS } from "../lib/technicians";
 import { UsersPanel } from "./users-panel";
 import { can,canSeeFinance, roleLabels, technicianFields, type Role } from "../lib/permissions";
 import { balance } from "../lib/payments";
@@ -62,6 +63,8 @@ export type Equipment = {
   id: number;
   orderNumber: string;
   invoiceNumber: string | null;
+  invoiceKind:string;
+  invoiceTechnician:string|null;
   customerName: string;
   customerPhone: string;
   customerEmail: string;
@@ -228,7 +231,8 @@ async function fetchPage({ search, status, cursor, signal, technician, entryFrom
 
 export default function RegistryClient({ previewLabel, userEmail, signOutPath, business, role,memberId }: RegistryClientProps) {
   const financial=canSeeFinance(role);
-  const [usersOpen,setUsersOpen]=useState(false),[staffOptions,setStaffOptions]=useState<{id:number;name:string}[]>([]),[staffRefresh,setStaffRefresh]=useState(0);
+  const [openOrders,setOpenOrders]=useState(false);
+  const [usersOpen,setUsersOpen]=useState(false),[staffOptions,setStaffOptions]=useState<{id:number|null;name:string}[]>([]),[staffRefresh,setStaffRefresh]=useState(0);
   // La sesión se renueva sola mientras esta pantalla esté abierta.
   useSessionRenewal(signOutPath === "/api/session");
   const [records, setRecords] = useState<Equipment[]>([]);
@@ -242,7 +246,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
   // todos salían en el verde de "listo": un error de guardado se leía como
   // una confirmación.
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
-  useEffect(()=>{if(!can(role,"receive"))return;const controller=new AbortController();void fetch("/api/users?technicians=1",{signal:controller.signal,cache:"no-store"}).then(async response=>{if(!response.ok)throw new Error("No se pudieron cargar los técnicos.");return response.json() as Promise<{technicians:{id:number;name:string}[]}>;}).then(data=>{if(!controller.signal.aborted)setStaffOptions(data.technicians);}).catch(()=>{if(!controller.signal.aborted)setNotice({text:"No se pudieron cargar las cuentas de técnicos. Actualiza la página.",error:true});});return()=>controller.abort();},[role,staffRefresh]);
+  useEffect(()=>{if(!can(role,"receive"))return;const controller=new AbortController();void fetch("/api/users?technicians=1",{signal:controller.signal,cache:"no-store"}).then(async response=>{if(!response.ok)throw new Error("No se pudieron cargar los técnicos.");return response.json() as Promise<{technicians:{id:number|null;name:string}[]}>;}).then(data=>{if(!controller.signal.aborted)setStaffOptions(data.technicians);}).catch(()=>{if(!controller.signal.aborted)setNotice({text:"No se pudieron cargar las cuentas de técnicos. Actualiza la página.",error:true});});return()=>controller.abort();},[role,staffRefresh]);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState<"todos" | Status>("todos");
@@ -551,6 +555,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
               una orden, y perder el formulario a medio llenar sería peor que
               tener dos pestañas. */}
           {financial&&<a className="secondary-button" href="/precios/" target="_blank" rel="noopener noreferrer">Precios de repuestos</a>}
+          <button className="secondary-button" onClick={()=>setOpenOrders(true)}>Órdenes abiertas</button>
           {financial&&<button className="secondary-button" onClick={() => setReportsOpen(true)}>Indicadores y reportes</button>}
           {role==="admin"&&<button className="secondary-button" onClick={()=>setUsersOpen(true)}>Usuarios y permisos</button>}
           {financial&&<button className="secondary-button" onClick={() => setInventoryOpen(true)}>Inventario{Boolean(stockAlerts) && <span className="stock-count" aria-label={`${stockAlerts} repuestos con stock bajo`}>{stockAlerts}</span>}</button>}
@@ -563,7 +568,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
           <p className="eyebrow">CONTROL DE SERVICIO TÉCNICO</p>
           <h1>{role==="tecnico"?"Mis órdenes":"Registro de equipos"}</h1>
           <p className="hero-copy">Un solo lugar para controlar ingresos, reparaciones, costos y entregas.</p>
-          <details className="access-help"><summary>Mi acceso: {roleLabels[role]}</summary><p>Administrador y recepción consultan importes y cobros. El técnico trabaja solo en las órdenes asignadas a su cuenta. Solo lectura consulta las órdenes sin información económica.</p><p>El administrador gestiona las cuentas desde «Usuarios y permisos».</p></details>
+          <details className="access-help"><summary>Mi acceso: {roleLabels[role]}</summary><p>El administrador gestiona ingresos, usuarios, inventario y pagos. Cada técnico toma órdenes abiertas, registra su trabajo y mano de obra, y consulta sus facturas a Pacific Tech.</p></details>
         </div>
         <div className="date-chip"><span>Hoy</span><strong>{formatDate(currentDate)}</strong></div>
       </section>
@@ -608,7 +613,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
 
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Orden</th><th>Cliente</th><th>Equipo</th><th>Técnico</th><th>Ingreso / plazo</th><th>Estado</th>{financial&&<th>Total</th>}<th></th></tr></thead>
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Equipo</th><th>Técnico</th><th>Ingreso / plazo</th><th>Estado</th><th>{financial?"Importe / saldo":"Mano de obra"}</th><th></th></tr></thead>
             <tbody>
               {records.map((record) => (
                 <tr key={record.id}>
@@ -618,8 +623,8 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
                   <td><strong>{record.assignedTechnician || "Sin asignar"}</strong></td>
                   <td>{formatDate(record.entryDate)}{record.status !== "anulado" && <small>{workshopDays(record.entryDate, currentDate, record.exitDate)} días {record.status === "entregado" ? "hasta entrega" : "en taller"}</small>}{record.estimatedExitDate && <small className={record.status !== "entregado" && record.status !== "anulado" && record.estimatedExitDate < currentDate ? "overdue" : ""}>Estimada: {formatDate(record.estimatedExitDate)}{record.status !== "entregado" && record.status !== "anulado" && record.estimatedExitDate < currentDate ? " · Vencida" : ""}</small>}</td>
                   <td><select className={`status status-control ${record.status}`} value={record.status} disabled={saving || !can(role, "edit") || (role === "tecnico" && ["entregado", "anulado"].includes(record.status))} onChange={(event) => handleStatusChange(record, event)} aria-label={`Cambiar estado de ${record.orderNumber}`}>{statusOptions.map(([value, label]) => <option disabled={role === "tecnico" && ["entregado", "anulado"].includes(value)} key={value} value={value}>{label}</option>)}</select></td>
-                  {financial&&<td><strong>{formatMoney(record.status === "entregado" ? record.invoiceTotalCents : calculateTotals(record.partsCostCents, record.laborCostCents).totalCents)}</strong><small>{balance(record).label} · Saldo {formatMoney(balance(record).dueCents)}</small></td>}
-                  <td><button className="row-action" onClick={() => record.status === "entregado"&&financial ? setInvoice(record) : setDetail(record)} aria-label={`Abrir ${record.orderNumber}`}>›</button></td>
+                  <td><strong>{formatMoney(financial?balance(record).totalCents:record.laborCostCents)}</strong>{financial&&<small>{balance(record).label} · Saldo {formatMoney(balance(record).dueCents)}</small>}</td>
+                  <td><button className="row-action" onClick={() => record.status === "entregado"&&(financial||record.invoiceKind==="technician") ? setInvoice(record) : setDetail(record)} aria-label={`Abrir ${record.orderNumber}`}>›</button></td>
                 </tr>
               ))}
             </tbody>
@@ -630,6 +635,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
         {hasMore && <div className="load-more"><button className="secondary-button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Cargando…" : "Cargar más"}</button></div>}
       </section>
 
+      {openOrders&&<OpenOrders canClaim={role==="tecnico"} onClose={()=>setOpenOrders(false)} onTaken={()=>{setOpenOrders(false);setRefreshVersion(v=>v+1);setNotice({text:"Orden asignada a tu cuenta. Ya puedes registrar el trabajo.",error:false});}}/>}
       {newOpen && <div className="modal-backdrop" role="presentation" onMouseDown={closeOnBackdrop(closeNewRecord)}><section ref={newModalRef} className="drawer" aria-modal="true" role="dialog" aria-labelledby="new-title">
         <div className="drawer-head"><div><p className="eyebrow">NUEVA ORDEN</p><h2 id="new-title">Registrar ingreso</h2></div><button className="close" onClick={closeNewRecord} aria-label="Cerrar">×</button></div>
         <form onSubmit={createRecord} className="entry-form">
@@ -642,7 +648,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
           <fieldset disabled={saving}><legend>Equipo recibido</legend><div className="form-grid">
             <label>Tipo de equipo *<select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value })}>{EQUIPMENT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
             <label>Fecha de ingreso<input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} /></label>
-            <label className="wide">Técnico asignado<select value={form.assignedMemberId??""} onChange={e=>{const id=e.target.value?Number(e.target.value):null;setForm({...form,assignedMemberId:id,assignedTechnician:staffOptions.find(t=>t.id===id)?.name||"Sin asignar"});}}><option value="">Sin asignar</option>{staffOptions.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+            <label className="wide">Técnico asignado<select value={form.assignedTechnician||"Sin asignar"} onChange={e=>{const name=e.target.value;setForm({...form,assignedMemberId:staffOptions.find(t=>t.name===name)?.id??null,assignedTechnician:name});}}><option value="Sin asignar">Sin asignar · orden abierta</option>{TECHNICIANS.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
             <label>Marca<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.brand.max} value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Ej. Lenovo" /></label>
             <label>Modelo<input type="text" maxLength={EQUIPMENT_TEXT_FIELDS.model.max} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="Ej. ThinkPad E14" /></label>
             <label className="wide">Serial / IMEI (opcional)<input maxLength={EQUIPMENT_TEXT_FIELDS.serialNumber.max} value={form.serialNumber} onChange={e => setForm({ ...form, serialNumber: e.target.value })} placeholder="Número de serie o IMEI del equipo" /></label>
@@ -666,7 +672,7 @@ export default function RegistryClient({ previewLabel, userEmail, signOutPath, b
   );
 }
 
-function DetailDrawer({ staffOptions,role, record, saving, errorMessage, onClose, onUpdate, onInvoice, onShowInvoice, conflict, onReload, onShowReceipt, company, onInventoryChanged }: { staffOptions:{id:number;name:string}[];role: Role; onInventoryChanged: () => void; company: string; conflict: boolean; onReload: () => Promise<void>; onShowReceipt: () => void; record: Equipment; saving: boolean; errorMessage: string | null; onClose: () => void; onUpdate: (id: number, values: Record<string, unknown>) => Promise<Equipment | undefined>; onInvoice: (values: Record<string, unknown>) => Promise<Equipment | undefined>; onShowInvoice: () => void }) {
+function DetailDrawer({ staffOptions,role, record, saving, errorMessage, onClose, onUpdate, onInvoice, onShowInvoice, conflict, onReload, onShowReceipt, company, onInventoryChanged }: { staffOptions:{id:number|null;name:string}[];role: Role; onInventoryChanged: () => void; company: string; conflict: boolean; onReload: () => Promise<void>; onShowReceipt: () => void; record: Equipment; saving: boolean; errorMessage: string | null; onClose: () => void; onUpdate: (id: number, values: Record<string, unknown>) => Promise<Equipment | undefined>; onInvoice: (values: Record<string, unknown>) => Promise<Equipment | undefined>; onShowInvoice: () => void }) {
   const financial=canSeeFinance(role);
   const [draft, setDraft] = useState(() => ({
     ...record,
@@ -690,16 +696,15 @@ function DetailDrawer({ staffOptions,role, record, saving, errorMessage, onClose
   const busy = saving || noteSaving || contactSaving || inventoryBusy || paymentBusy || attachmentBusy;
   const [warrantyInput, setWarrantyInput] = useState(String(record.warrantyDays));
   const warrantyValid = /^\d+$/.test(warrantyInput) && Number(warrantyInput) <= 3650;
-  const [partsCostInput, setPartsCostInput] = useState(centsToDollarInput(record.partsCostCents));
+  const [partsCostInput, setPartsCostInput] = useState(centsToDollarInput(record.partsCostCents??0));
   const [laborCostInput, setLaborCostInput] = useState(centsToDollarInput(record.laborCostCents));
   const partsCostCents = dollarsToCents(partsCostInput);
   const laborCostCents = dollarsToCents(laborCostInput);
   const costsValid = partsCostCents !== null && laborCostCents !== null && partsCostCents + laborCostCents <= MAX_MONEY_CENTS;
-  const totals = calculateTotals(partsCostCents ?? 0, laborCostCents ?? 0);
   const updateValues = costsValid && warrantyValid
     ? {
         status: draft.status,
-        ...(draft.assignedMemberId!==record.assignedMemberId?{assignedTechnician:draft.assignedTechnician,assignedMemberId:draft.assignedMemberId}:{}),
+        ...((draft.assignedMemberId!==record.assignedMemberId||draft.assignedTechnician!==record.assignedTechnician)?{assignedTechnician:draft.assignedTechnician,assignedMemberId:draft.assignedMemberId}:{}),
         diagnosis: draft.diagnosis,
         partsDescription: draft.partsDescription,
         partsCostCents,
@@ -721,7 +726,7 @@ function DetailDrawer({ staffOptions,role, record, saving, errorMessage, onClose
       }
     : null;
   const orderDirty = !updateValues || Object.entries(updateValues).some(([key, value]) => {
-    if(!financial&&["partsCostCents","laborCostCents"].includes(key))return false;
+    if(!financial&&key==="partsCostCents")return false;
     const original = key === "laborDescription" && record.laborDescription === DEFAULT_LABOR_DESCRIPTION
       ? "" : record[key as keyof Equipment];
     return value !== original;
@@ -743,7 +748,7 @@ function DetailDrawer({ staffOptions,role, record, saving, errorMessage, onClose
     if (!updated) return;
     setDraft({ ...updated, laborDescription: updated.laborDescription === DEFAULT_LABOR_DESCRIPTION ? "" : updated.laborDescription });
     setWarrantyInput(String(updated.warrantyDays));
-    setPartsCostInput(centsToDollarInput(updated.partsCostCents));
+    setPartsCostInput(centsToDollarInput(updated.partsCostCents??0));
     setLaborCostInput(centsToDollarInput(updated.laborCostCents));
   }
   const modalRef = useModal(requestClose);
@@ -756,7 +761,7 @@ function DetailDrawer({ staffOptions,role, record, saving, errorMessage, onClose
       <button type="button" className="secondary-button" onClick={() => { if (!dirty || confirmDiscardChanges()) onShowReceipt(); }}>Comprobante de ingreso</button>
       <div className="detail-facts"><span><b>Modelo</b>{record.model || "-"}</span><span><b>Ingreso</b>{formatDate(record.entryDate)}</span><span><b>Accesorios</b>{record.accessories || "Ninguno"}</span></div>
       <div className="issue"><b>Falla reportada</b><p>{record.reportedIssue}</p>{record.damageNotes && <small>Daños visibles: {record.damageNotes}</small>}</div>
-      <label>Técnico asignado<select disabled={!editable||role==="tecnico"} value={draft.assignedMemberId??""} onChange={e=>{const id=e.target.value?Number(e.target.value):null;setDraft({...draft,assignedMemberId:id,assignedTechnician:staffOptions.find(t=>t.id===id)?.name||"Sin asignar"});}}><option value="">{record.assignedMemberId===null&&record.assignedTechnician!=="Sin asignar"?`${record.assignedTechnician} · pendiente de vincular`:"Sin asignar"}</option>{draft.assignedMemberId&&!staffOptions.some(t=>t.id===draft.assignedMemberId)&&<option value={draft.assignedMemberId}>{draft.assignedTechnician}</option>}{staffOptions.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+      <label>Técnico asignado<select disabled={!editable||role==="tecnico"||record.status==="entregado"} value={draft.assignedTechnician} onChange={e=>{const name=e.target.value;setDraft({...draft,assignedMemberId:staffOptions.find(t=>t.name===name)?.id??null,assignedTechnician:name});}}><option value="Sin asignar">Sin asignar · orden abierta</option>{!TECHNICIANS.some(name=>name===draft.assignedTechnician)&&draft.assignedTechnician!=="Sin asignar"&&<option value={draft.assignedTechnician}>{draft.assignedTechnician} · histórico</option>}{TECHNICIANS.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
       <label>Estado<select disabled={!editable} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>{statusOptions.map(([value, label]) => <option disabled={role === "tecnico" && ["entregado", "anulado"].includes(value)} key={value} value={value}>{label}</option>)}</select></label>
       <div className="form-grid"><label>Entrega estimada<input disabled={!editable} type="date" min={draft.entryDate || undefined} value={draft.estimatedExitDate || ""} onChange={e => setDraft({ ...draft, estimatedExitDate: e.target.value || null })} /></label><label>Garantía del servicio (días)<input disabled={!editable || role === "tecnico"} type="number" min="0" max="3650" step="1" value={warrantyInput} onChange={e => setWarrantyInput(e.target.value)} /></label></div>
       {!warrantyValid && <p className="field-error" role="alert">La garantía debe ser un número entero de 0 a 3650 días.</p>}
@@ -780,15 +785,15 @@ function DetailDrawer({ staffOptions,role, record, saving, errorMessage, onClose
         </fieldset>
       </details>
 
-      {financial&&<fieldset disabled={!editable} className="cost-box"><h3>Costos del servicio</h3><label>Descripción de piezas<input maxLength={EQUIPMENT_TEXT_FIELDS.partsDescription.max} value={draft.partsDescription} onChange={(e) => setDraft({ ...draft, partsDescription: e.target.value })} placeholder="Pieza o repuesto utilizado" /></label><label className="money-field">Precio de piezas<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={partsCostCents === null} value={partsCostInput} onChange={(e) => setPartsCostInput(e.target.value)} /></label><label>Descripción de mano de obra<input maxLength={EQUIPMENT_TEXT_FIELDS.laborDescription.max} value={draft.laborDescription} onChange={(e) => setDraft({ ...draft, laborDescription: e.target.value })} placeholder="Ej. Diagnóstico, instalación o limpieza" /></label><label className="money-field">Mano de obra<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={laborCostCents === null} value={laborCostInput} onChange={(e) => setLaborCostInput(e.target.value)} /></label>{!costsValid && <p className="field-error" role="alert">Ingresa montos válidos, mayores o iguales a cero y con máximo dos decimales y un total de hasta $21,474,836.47.</p>}{costsValid && <div className="cost-summary"><div className="total-row"><span>Total estimado</span><strong>{formatMoney(totals.totalCents)}</strong></div></div>}</fieldset>}
+      <fieldset disabled={!editable} className="cost-box"><h3>Trabajo del técnico</h3><label>Descripción de piezas<input maxLength={EQUIPMENT_TEXT_FIELDS.partsDescription.max} value={draft.partsDescription} onChange={(e) => setDraft({ ...draft, partsDescription: e.target.value })} placeholder="Pieza o repuesto utilizado" /></label>{financial&&<label className="money-field">Costo de piezas · uso interno<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={partsCostCents === null} value={partsCostInput} onChange={(e) => setPartsCostInput(e.target.value)} /></label>}<label>Descripción de mano de obra<input maxLength={EQUIPMENT_TEXT_FIELDS.laborDescription.max} value={draft.laborDescription} onChange={(e) => setDraft({ ...draft, laborDescription: e.target.value })} placeholder="Ej. Diagnóstico, instalación o limpieza" /></label><label className="money-field">Mano de obra a facturar a Pacific Tech<input type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={laborCostCents === null} value={laborCostInput} onChange={(e) => setLaborCostInput(e.target.value)} /></label>{!costsValid && <p className="field-error" role="alert">Ingresa montos válidos, mayores o iguales a cero y con máximo dos decimales y un total de hasta $21,474,836.47.</p>}{costsValid && <div className="cost-summary"><div className="total-row"><span>Mano de obra</span><strong>{formatMoney(laborCostCents??0)}</strong></div></div>}</fieldset>
     </fieldset>
     <OrderAttachments equipmentId={record.id} disabled={saving || noteSaving || contactSaving || inventoryBusy || paymentBusy} canUpload={can(role, "note")} onBusy={setAttachmentBusy} onDirty={setAttachmentDirty} onSaved={() => setHistoryRefresh(v => v + 1)} />
-    {financial&&<OrderPayments equipmentId={record.id} role={role} disabled={attachmentBusy || attachmentDirty || saving || noteSaving || contactSaving || inventoryBusy || orderDirty || inventoryDirty || contactDirty || Boolean(note.trim())} onBusy={setPaymentBusy} onDirty={setPaymentDirty} onSaved={onReload} />}
+    {financial&&<OrderPayments laborBilling={record.invoiceKind==="technician"} equipmentId={record.id} role={role} disabled={attachmentBusy || attachmentDirty || saving || noteSaving || contactSaving || inventoryBusy || orderDirty || inventoryDirty || contactDirty || Boolean(note.trim())} onBusy={setPaymentBusy} onDirty={setPaymentDirty} onSaved={onReload} />}
     <OrderInventory financial={financial} equipmentId={record.id} status={record.status} disabled={attachmentBusy || saving || noteSaving || contactSaving || paymentBusy || !can(role, "consume")} onBusy={setInventoryBusy} onDirty={setInventoryDirty} onChanged={() => { setHistoryRefresh(value => value + 1); onInventoryChanged(); }} />
     {financial&&<CustomerContact record={record} company={company} disabled={attachmentBusy || saving || noteSaving || inventoryBusy || paymentBusy || !can(role, "note")} onBusyChange={setContactSaving} onDirtyChange={setContactDirty} onSaved={() => setHistoryRefresh(value => value + 1)} />}
     <EquipmentHistory equipmentId={record.id} version={record.version + historyRefresh} legacyNote={record.notes} note={note} onNoteChange={setNote} disabled={attachmentBusy || saving || contactSaving || inventoryBusy || paymentBusy || !can(role, "note")} onBusyChange={setNoteSaving} />
     {dirty && <p className="unsaved-hint" role="status">Cambios sin guardar</p>}
-    <div className="drawer-actions"><button className="secondary-button" disabled={busy || conflict || !updateValues || !editable} onClick={() => void saveChanges()}>Guardar cambios</button>{financial&&(record.status !== "entregado" ? <button className="primary-button" disabled={busy || conflict || !updateValues || !can(role, "receive")} onClick={() => { if (updateValues && ((!note.trim() && !contactDirty && !inventoryDirty && !paymentDirty && !attachmentDirty) || confirmDiscardChanges())) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={busy} onClick={showSavedInvoice}>Ver factura</button>)}</div>
+    <div className="drawer-actions"><button className="secondary-button" disabled={busy || conflict || !updateValues || !editable} onClick={() => void saveChanges()}>Guardar cambios</button>{(financial||(record.invoiceKind==="technician"&&record.status==="entregado"))&&(record.status !== "entregado" ? <button className="primary-button" disabled={busy || conflict || !updateValues || !can(role, "receive")} onClick={() => { if (updateValues && ((!note.trim() && !contactDirty && !inventoryDirty && !paymentDirty && !attachmentDirty) || confirmDiscardChanges())) void onInvoice(updateValues); }}>Registrar salida y facturar</button> : <button className="primary-button" disabled={busy} onClick={showSavedInvoice}>Ver factura</button>)}</div>
   </section></div>;
 }
 
@@ -800,19 +805,26 @@ function InvoiceModal({ record, business, onClose }: { record: Equipment; busine
     const href = buildInvoiceEmailHref(record, business);
     if (!href) {
       setEmailStatus({
-        message: "Esta orden no tiene un correo válido. Registra el correo del cliente para poder enviarle la factura.",
+        message: record.invoiceKind==="technician"?"Falta configurar el correo de Pacific Tech. Puedes imprimir o guardar la factura como PDF.":"Esta orden no tiene un correo válido. Registra el correo del cliente para poder enviarle la factura.",
         error: true,
       });
       return;
     }
 
     setEmailStatus({
-      message: `Factura preparada para ${record.customerEmail}. Revisa el mensaje y presiona Enviar en tu aplicación de correo.`,
+      message: `Factura preparada para ${record.invoiceKind==="technician"?business.email:record.customerEmail}. Revisa el mensaje y presiona Enviar en tu aplicación de correo.`,
       error: false,
     });
     window.location.href = href;
   }
 
+  if(record.invoiceKind==="technician")return <div ref={modalRef} className="invoice-backdrop" role="dialog" aria-modal="true" aria-labelledby="labor-invoice-title"><div className="invoice-toolbar"><button data-autofocus className="ghost-button" onClick={onClose}>← Volver</button><span id="labor-invoice-title">Factura de mano de obra</span><div className="invoice-actions"><button className="secondary-button" onClick={emailInvoice}>Preparar correo a Pacific Tech</button><button className="primary-button" onClick={()=>window.print()}>Imprimir / PDF</button></div></div>{emailStatus&&<p className="invoice-email-status" role="status">{emailStatus.message}</p>}<article className="invoice-page">
+    <header className="invoice-header"><div className="invoice-company"><div><small>EMITIDA POR</small><strong>{record.invoiceTechnician}</strong><span>Servicios técnicos · Mano de obra</span></div></div><div className="invoice-number"><small>FACTURA NO FISCAL</small><strong>{record.invoiceNumber}</strong><span>{formatDate(record.exitDate)}</span></div></header>
+    <section className="invoice-client"><div><small>FACTURADO A</small><strong>Pacific Tech</strong></div><div><small>ORDEN DE SERVICIO</small><strong>{record.orderNumber}</strong><span>{[record.equipmentType,record.brand,record.model].filter(Boolean).join(" ")}</span></div></section>
+    <p><strong>Trabajo realizado por: {record.invoiceTechnician}</strong></p>
+    <table className="invoice-table"><thead><tr><th>Trabajo realizado</th><th>Mano de obra</th></tr></thead><tbody><tr><td><strong>{record.laborDescription||"Servicio técnico / mano de obra"}</strong><span>{record.diagnosis||record.reportedIssue}</span></td><td>{formatMoney(record.invoiceTotalCents)}</td></tr></tbody></table>
+    <div className="invoice-totals"><div className="grand-total"><span>Total a Pacific Tech</span><strong>{formatMoney(record.invoiceTotalCents)}</strong></div></div><footer className="invoice-footer"><span>Documento no fiscal · Servicios prestados a Pacific Tech</span></footer>
+  </article></div>;
   return <div ref={modalRef} className="invoice-backdrop" role="dialog" aria-modal="true" aria-labelledby="invoice-title"><div className="invoice-toolbar"><button data-autofocus className="ghost-button" onClick={onClose}>← Volver</button><span id="invoice-title">Vista previa de factura no fiscal</span><div className="invoice-actions"><button className="secondary-button" onClick={emailInvoice}>Enviar por correo</button><button className="primary-button" onClick={() => window.print()}>Imprimir / PDF</button></div></div>{emailStatus && <div className={`invoice-email-status${emailStatus.error ? " error" : ""}`} role="status">{emailStatus.message}</div>}<article className="invoice-page">
     <header className="invoice-header"><div className="invoice-company"><Image className="invoice-logo" src="/pacific-tech-logo.png" alt="Pacific Tech Pa" width={132} height={70} /><div><strong>{business.legalName}</strong><span>RUC: {business.taxId}</span>{business.addressLines.map((line) => <span key={line}>{line}</span>)}<span>{contactLine(business)}</span></div></div><div className="invoice-number"><small>FACTURA NO FISCAL</small><strong>{record.invoiceNumber || `NF-${String(record.id).padStart(7, "0")}`}</strong><span>Emitida el: {formatDate(record.exitDate || today())}</span></div></header>
     <section className="invoice-client"><div><small>CLIENTE</small><strong>{record.customerName}</strong><span>{record.customerEmail || record.customerPhone || "Consumidor final"}</span></div><div><small>ORDEN DE SERVICIO</small><strong>{record.orderNumber}</strong><span>{record.equipmentType} {[record.brand, record.model].filter(Boolean).join(" ")}</span></div></section>

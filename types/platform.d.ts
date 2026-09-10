@@ -11,6 +11,7 @@ declare module "@platform/auth" {
   export const previewLabel: string | null;
 }
 declare module "@platform/equipment" {
+  export const claimEquipment: typeof import("../platforms/netlify/equipment").claimEquipment;
   export const getLastEquipmentContact: typeof import("../platforms/netlify/equipment").getLastEquipmentContact;
   export const listReportRows: typeof import("../platforms/netlify/equipment").listReportRows;
   export const getEquipment: typeof import("../platforms/netlify/equipment").getEquipment;

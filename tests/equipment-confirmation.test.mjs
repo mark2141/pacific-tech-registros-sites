@@ -4,10 +4,10 @@ import { equipmentChangeConfirmation } from "../lib/equipment-confirmation.ts";
 const order = { orderNumber: "OT-202609-001", status: "listo", partsCostCents: 0, laborCostCents: 0 };
 
 test("entregar desde cualquier acción usa los costos del borrador y avisa si son cero", () => {
-  assert.match(equipmentChangeConfirmation(order, { status: "entregado" }), /no tiene costos/);
+  assert.match(equipmentChangeConfirmation(order, { status: "entregado" }), /no tiene mano de obra/);
   const message = equipmentChangeConfirmation(order, { status: "entregado", laborCostCents: 2500 });
   assert.match(message, /25[.,]00/);
-  assert.doesNotMatch(message, /no tiene costos/);
+  assert.doesNotMatch(message, /no tiene mano de obra/);
 });
 test("anular y reabrir una entrega explican que se retira la factura", () => {
   const delivered = { ...order, status: "entregado" };

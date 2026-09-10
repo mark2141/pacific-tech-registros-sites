@@ -11,10 +11,8 @@ async function request(path, method = "GET", body, authenticated = true) {
 const orders = [];
 const marker = `Seguimiento ficticio ${Date.now()}`;
 try {
-  for (const [assignedTechnician, entryDate] of [[marker, "2026-09-01"], [marker, "2026-09-07"], [marker + " otro", "2026-09-07"]]) {
-    const account=await request("/api/users","POST",{email:`tracking-${crypto.randomUUID()}@example.test`,name:assignedTechnician,role:"tecnico",enabled:1});
-    assert.equal(account.status,201);
-    const result = await request("/api/equipment", "POST", { assignedMemberId:account.body.user.id,customerName: marker, equipmentType: "Laptop", reportedIssue: "Prueba automatizada local", serialNumber: "IMEI-LOCAL-123", assignedTechnician, entryDate, estimatedExitDate: "2026-09-10", warrantyDays: 90 });
+  for (const [assignedTechnician, entryDate] of [["Anthony", "2026-09-01"], ["Anthony", "2026-09-07"], ["Xavier", "2026-09-07"]]) {
+    const result = await request("/api/equipment", "POST", { customerName: marker, equipmentType: "Laptop", reportedIssue: "Prueba automatizada local", serialNumber: "IMEI-LOCAL-123", assignedTechnician, entryDate, estimatedExitDate: "2026-09-10", warrantyDays: 90 });
     assert.equal(result.status, 201, JSON.stringify(result.body)); orders.push(result.body.equipment);
   }
   const first = orders[0];
@@ -45,14 +43,14 @@ try {
   assert.equal((await request("/api/equipment/history", "POST", { equipmentId: first.id, message: " " })).status, 400);
   const cleared = await request("/api/equipment", "PATCH", { id: first.id, version: winner.version, estimatedExitDate: null, warrantyDays: 0 });
   assert.equal(cleared.status, 200); assert.equal(cleared.body.equipment.estimatedExitDate, null); assert.equal(cleared.body.equipment.warrantyDays, 0);
-  const filter = new URLSearchParams({ technician: marker, entryFrom: "2026-09-01", entryTo: "2026-09-07", limit: "1" });
+  const filter = new URLSearchParams({ technician: "Anthony", entryFrom: "2026-09-01", entryTo: "2026-09-07", limit: "1" });
   const page1 = await request(`/api/equipment?${filter}`);
   assert.equal(page1.body.total, 2); assert.equal(page1.body.equipment.length, 1); assert.ok(page1.body.nextCursor);
   filter.set("cursor", page1.body.nextCursor);
   const page2 = await request(`/api/equipment?${filter}`);
   assert.equal(page2.body.total, 2); assert.equal(page2.body.equipment.length, 1); assert.notEqual(page1.body.equipment[0].id, page2.body.equipment[0].id);
-  assert.equal(page2.body.nextCursor, null); assert.ok(page2.body.technicians.includes(marker + " otro"));
-  const exactDay = await request(`/api/equipment?${new URLSearchParams({ technician: marker, entryFrom: "2026-09-07", entryTo: "2026-09-07" })}`);
+  assert.equal(page2.body.nextCursor, null); assert.ok(page2.body.technicians.includes("Xavier"));
+  const exactDay = await request(`/api/equipment?${new URLSearchParams({ technician: "Anthony", entryFrom: "2026-09-07", entryTo: "2026-09-07" })}`);
   assert.equal(exactDay.body.total, 1);
   assert.equal((await request("/api/equipment?entryFrom=2026-09-08&entryTo=2026-09-07")).status, 400);
   for (let index = 0; index < 49; index++) {
@@ -70,7 +68,7 @@ try {
   assert.equal((await request("/api/equipment/history", "POST", { equipmentId: first.id, kind: "contacto", channel: "sms", template: "recibido", recipient: "123", message: "Ficticio" })).status, 400);
   const delivered = await request("/api/equipment", "PATCH", { id: orders[1].id, version: orders[1].version, status: "entregado", exitDate: "2026-09-07", laborCostCents: 1299 });
   assert.equal(delivered.status, 200);
-  const reportQuery = new URLSearchParams({ technician: marker, from: "2026-09-01", to: "2026-09-07" });
+  const reportQuery = new URLSearchParams({ technician: "Anthony", from: "2026-09-01", to: "2026-09-07" });
   const report = await request(`/api/equipment/reports?${reportQuery}`);
   assert.equal(report.status, 200, JSON.stringify(report.body));
   assert.equal(report.body.report.active, 1); assert.equal(report.body.report.received, 2);

@@ -7,7 +7,7 @@ async function request(path, method = "GET", body, authenticated = true) {
   const r = await fetch(origin + path, { method, headers: { "Content-Type": "application/json", ...(authenticated ? { Cookie: cookie } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   return { status: r.status, body: await r.json(), headers: r.headers };
 }
-const created = await request("/api/equipment", "POST", { customerName: "Pagos ficticios", equipmentType: "Laptop", reportedIssue: "Prueba local de pagos" });
+const created = await request("/api/equipment", "POST", { assignedTechnician:"Anthony",customerName: "Pagos ficticios", equipmentType: "Laptop", reportedIssue: "Prueba local de pagos" });
 assert.equal(created.status, 201, JSON.stringify(created.body)); let order = created.body.equipment;
 async function fresh() { order = (await request(`/api/equipment/detail?id=${order.id}`)).body.equipment; return order; }
 async function edit(payload) { return request("/api/equipment", "PATCH", { id: order.id, version: order.version, ...payload }); }
@@ -17,7 +17,7 @@ const page = () => request(`/api/equipment/payments?equipmentId=${order.id}`);
 try {
   assert.equal((await request(`/api/equipment/payments?equipmentId=${order.id}`, "GET", null, false)).status, 403);
   assert.equal((await request("/api/equipment/payments", "POST", payload(), false)).status, 403);
-  assert.equal((await edit({ partsCostCents: 6000, laborCostCents: 4000 })).status, 200); await fresh();
+  assert.equal((await edit({ partsCostCents: 6000, laborCostCents: 10000 })).status, 200); await fresh();
   const attempts = [payload(), payload()]; const race = await Promise.all(attempts.map(pay));
   assert.deepEqual(race.map(r => r.status).sort(), [200, 409], JSON.stringify(race));
   const winnerIndex = race.findIndex(r => r.status === 200); const winner = race[winnerIndex].body.payment; const input = attempts[winnerIndex];

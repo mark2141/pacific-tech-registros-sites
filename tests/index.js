@@ -25,3 +25,4 @@ import "./inventory.test.mjs";
 import "./payments-permissions.test.mjs";
 import "./attachments.test.mjs";
 import "./staff.test.mjs";
+import "./technician-billing.test.mjs";

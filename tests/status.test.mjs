@@ -14,6 +14,7 @@ test("pasar a entregado asigna fecha de salida y número de factura", () => {
   const values = buildEquipmentUpdate(
     {
       id: 42,
+      assignedTechnician:"Anthony",
       status: "listo",
       exitDate: null,
       invoiceNumber: null,
@@ -26,8 +27,8 @@ test("pasar a entregado asigna fecha de salida y número de factura", () => {
   assert.equal(values.status, "entregado");
   assert.equal(values.exitDate, "2026-08-08");
   assert.equal(values.invoiceNumber, "NF-0000042");
-  assert.equal(values.invoiceSubtotalCents, 6_999);
-  assert.equal(values.invoiceTotalCents, 6_999);
+  assert.equal(values.invoiceSubtotalCents, 5_000);
+  assert.equal(values.invoiceTotalCents, 5_000);
   // Nulo, no cero: una factura emitida sin impuesto se distingue así de una a
   // la que se le aplicó un 0 %, y de las anteriores al cambio, que conservan
   // el ITBMS que sí se cobró.
